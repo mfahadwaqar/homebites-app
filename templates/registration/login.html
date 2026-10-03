@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+
+{% block title %}Sign in — HomeBites{% endblock %}
+
+{% block content %}
+<section class="account-panel" aria-labelledby="login-title">
+  <h1 id="login-title">Sign in to HomeBites</h1>
+  {% if form.errors %}
+    <p class="form-alert" role="alert">Your username or password was not recognized.</p>
+  {% endif %}
+  <form method="post" class="stacked-form">
+    {% csrf_token %}
+    {% for field in form %}
+      <div class="field-group">
+        {{ field.label_tag }}
+        {{ field }}
+        {{ field.errors }}
+      </div>
+    {% endfor %}
+    {% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}
+    <button type="submit">Sign in</button>
+  </form>
+  <p><a href="{% url 'password_reset' %}">Forgot your password?</a></p>
+  <p>New to HomeBites? <a href="{% url 'accounts:signup' %}">Create an account</a>.</p>
+</section>
+{% endblock %}
+

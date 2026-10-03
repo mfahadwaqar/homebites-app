@@ -168,6 +168,13 @@ button:focus-visible {
   line-height: 1.5;
 }
 
+.form-alert {
+  border-left: 4px solid #9d271f;
+  padding: 0.75rem 1rem;
+  background: #fff0ee;
+  color: #761b15;
+}
+
 .field-group .errorlist {
   margin: 0;
   color: #9d271f;
