@@ -109,7 +109,7 @@ This roadmap is the execution ledger for the complete simulated HomeBites projec
 
 - Django 5.2.17 runs against the healthy project-local PostgreSQL 17 Compose service; there is no SQLite fallback.
 - The custom `accounts.User` model, Django Admin registration, signup, protected profile, login, POST-only logout and enumeration-safe local password reset are implemented.
-- All 14 Django tests pass against PostgreSQL. `manage.py check`, `makemigrations --check --dry-run` and `migrate --check` pass.
+- All 16 Django tests pass against PostgreSQL. `manage.py check`, `makemigrations --check --dry-run` and `migrate --check` pass.
 - `manage.py check --deploy` reports only the expected localhost-development warnings for `DEBUG`, HTTPS/HSTS and secure cookies; public deployment is outside the approved scope.
 - Playwright with local Chrome passed the complete account journey at 1440×900 plus the home page at 390×844. It found no console errors, page errors, failed responses or external requests.
 - The Codex in-app browser could not initialize because its local kernel assets were unavailable, so the documented Playwright/Chrome fallback was used and screenshots were inspected manually.

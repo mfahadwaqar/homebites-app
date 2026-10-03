@@ -26,6 +26,25 @@ class AuthenticationTests(TestCase):
         )
         self.assertEqual(int(self.client.session["_auth_user_id"]), self.user.pk)
 
+    def test_authenticated_user_is_not_switched_by_login_form(self):
+        other_user = get_user_model().objects.create_user(
+            username="other-user",
+            password="other-safe-password-2026",
+        )
+        self.client.force_login(self.user)
+
+        response = self.client.post(
+            reverse("login"),
+            {"username": other_user.username, "password": "other-safe-password-2026"},
+        )
+
+        self.assertRedirects(
+            response,
+            reverse("accounts:profile"),
+            fetch_redirect_response=False,
+        )
+        self.assertEqual(int(self.client.session["_auth_user_id"]), self.user.pk)
+
     def test_logout_rejects_get_and_accepts_post(self):
         self.client.force_login(self.user)
 

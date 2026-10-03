@@ -49,3 +49,29 @@ class SignUpTests(TestCase):
         self.assertContains(response, "A user with that username already exists")
         self.assertEqual(user_model.objects.filter(username="maya").count(), 1)
 
+    def test_authenticated_user_cannot_create_another_account(self):
+        user_model = get_user_model()
+        current_user = user_model.objects.create_user(
+            username="maya",
+            password="safe-test-password-2026",
+        )
+        self.client.force_login(current_user)
+
+        response = self.client.post(
+            reverse("accounts:signup"),
+            {
+                "username": "second-account",
+                "email": "second@example.test",
+                "display_name": "Second Account",
+                "password1": "another-safe-password-2026",
+                "password2": "another-safe-password-2026",
+            },
+        )
+
+        self.assertRedirects(
+            response,
+            reverse("accounts:profile"),
+            fetch_redirect_response=False,
+        )
+        self.assertEqual(user_model.objects.count(), 1)
+
