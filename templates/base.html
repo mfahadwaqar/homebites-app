@@ -10,6 +10,18 @@
 <body>
   <header class="site-header">
     <a class="brand" href="/">HomeBites</a>
+    <nav aria-label="Account">
+      {% if user.is_authenticated %}
+        <a href="{% url 'accounts:profile' %}">Profile</a>
+        <form method="post" action="{% url 'logout' %}">
+          {% csrf_token %}
+          <button type="submit" class="text-button">Sign out</button>
+        </form>
+      {% else %}
+        <a href="{% url 'login' %}">Sign in</a>
+        <a href="{% url 'accounts:signup' %}">Create account</a>
+      {% endif %}
+    </nav>
   </header>
   <main class="page-shell">
     {% block content %}{% endblock %}

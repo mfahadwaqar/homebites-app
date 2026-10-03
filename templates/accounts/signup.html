@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+
+{% block title %}Create account — HomeBites{% endblock %}
+
+{% block content %}
+<section class="account-panel" aria-labelledby="signup-title">
+  <h1 id="signup-title">Create your HomeBites account</h1>
+  <p>Use fictional details for this university demonstration.</p>
+  <form method="post" class="stacked-form" novalidate>
+    {% csrf_token %}
+    {{ form.non_field_errors }}
+    {% for field in form %}
+      <div class="field-group">
+        {{ field.label_tag }}
+        {{ field }}
+        {% if field.help_text %}<div class="help-text">{{ field.help_text|safe }}</div>{% endif %}
+        {{ field.errors }}
+      </div>
+    {% endfor %}
+    <button type="submit">Create account</button>
+  </form>
+  <p>Already registered? <a href="{% url 'login' %}">Sign in</a>.</p>
+</section>
+{% endblock %}
+

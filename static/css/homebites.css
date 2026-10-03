@@ -25,6 +25,10 @@ body {
 
 .site-header {
   padding-block: 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.5rem;
 }
 
 .brand {
@@ -32,6 +36,38 @@ body {
   font-size: 1.25rem;
   font-weight: 800;
   text-decoration: none;
+}
+
+.site-header nav,
+.site-header nav form {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin: 0;
+}
+
+a {
+  color: var(--ink);
+  text-underline-offset: 0.2em;
+}
+
+button,
+.text-button {
+  border: 0;
+  border-radius: 0.35rem;
+  padding: 0.75rem 1rem;
+  background: var(--accent);
+  color: #24143f;
+  font: inherit;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.text-button {
+  padding: 0;
+  background: transparent;
+  text-decoration: underline;
+  text-underline-offset: 0.2em;
 }
 
 .page-shell {
@@ -76,5 +112,89 @@ body {
   border-left: 4px solid var(--accent);
   font-weight: 700;
 }
+
+.account-panel {
+  width: min(100%, 560px);
+  padding: clamp(1.5rem, 5vw, 3rem);
+  border: 1px solid #d9d1df;
+  background: #fffdfa;
+  box-shadow: 0 1rem 3rem rgb(42 26 74 / 10%);
+}
+
+.account-panel h1 {
+  margin-top: 0;
+  font-size: clamp(2rem, 7vw, 3.5rem);
+  line-height: 1.05;
+  letter-spacing: -0.04em;
+}
+
+.stacked-form,
+.field-group {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.stacked-form {
+  gap: 1.25rem;
+  margin-block: 2rem;
+}
+
+.field-group label,
+.profile-details dt {
+  font-weight: 800;
+}
+
+.field-group input {
+  width: 100%;
+  border: 1px solid #8a7fb0;
+  border-radius: 0.25rem;
+  padding: 0.75rem;
+  background: white;
+  color: var(--ink);
+  font: inherit;
+}
+
+.field-group input:focus-visible,
+a:focus-visible,
+button:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 3px;
+}
+
+.help-text,
+.field-group .errorlist {
+  color: var(--muted);
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+.field-group .errorlist {
+  margin: 0;
+  color: #9d271f;
+}
+
+.profile-details div {
+  display: grid;
+  grid-template-columns: 7rem 1fr;
+  gap: 1rem;
+  padding-block: 0.75rem;
+  border-bottom: 1px solid #e6dfeb;
+}
+
+.profile-details dd {
+  margin: 0;
+}
+
+@media (max-width: 560px) {
+  .site-header {
+    align-items: flex-start;
+  }
+
+  .site-header nav {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+}
+
 
 

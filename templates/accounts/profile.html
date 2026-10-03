@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+
+{% block title %}Your profile — HomeBites{% endblock %}
+
+{% block content %}
+<section class="account-panel" aria-labelledby="profile-title">
+  <p class="intro__label">Customer account</p>
+  <h1 id="profile-title">{{ user.display_name|default:user.username }}</h1>
+  <dl class="profile-details">
+    <div><dt>Username</dt><dd>{{ user.username }}</dd></div>
+    <div><dt>Email</dt><dd>{{ user.email|default:"Not provided" }}</dd></div>
+  </dl>
+  <p>Seller applications and marketplace activity will be added in later milestones.</p>
+</section>
+{% endblock %}
+
