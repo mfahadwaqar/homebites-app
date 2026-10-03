@@ -108,6 +108,9 @@ LOGIN_URL = "login"
 LOGIN_REDIRECT_URL = "accounts:profile"
 LOGOUT_REDIRECT_URL = "home"
 
-EMAIL_BACKEND = "django.core.mail.backends.console.EmailBackend"
+EMAIL_BACKEND = os.environ.get(
+    "DJANGO_EMAIL_BACKEND",
+    "django.core.mail.backends.console.EmailBackend",
+)
 DEFAULT_FROM_EMAIL = "HomeBites Demo <no-reply@homebites.local>"
 

@@ -4,8 +4,8 @@ This roadmap is the execution ledger for the complete simulated HomeBites projec
 
 | ID | Milestone | Main outcome | Status |
 |---|---|---|---|
-| M0 | Repository and delivery plan | Version-controlled project, approved specification, complete roadmap and local-environment strategy | In progress |
-| M1 | Foundation and accounts | Django/PostgreSQL foundation, custom user, registration, login, password reset preview and admin access | Pending |
+| M0 | Repository and delivery plan | Version-controlled project, approved specification, complete roadmap and local-environment strategy | Complete |
+| M1 | Foundation and accounts | Django/PostgreSQL foundation, custom user, registration, login, password reset preview and admin access | Complete |
 | M2 | Sellers and fixed food catalogue | Seller approval plus exactly 50 dishes—10 per country—with required seller-specific ingredients | Pending |
 | M3 | Marketplace discovery | Home, catalogue, search, country/dietary/price/availability filters, food details and seller storefronts | Pending |
 | M4 | Cart and fulfillment selection | Persistent single-seller cart, quantity validation, standard/pre-order slots and pickup/delivery selection | Pending |
@@ -96,4 +96,21 @@ This roadmap is the execution ledger for the complete simulated HomeBites projec
 - Exactly 50 dishes are discoverable after seeding, and reruns do not duplicate data.
 - Documentation includes accounts, setup, troubleshooting and the classroom walkthrough.
 - Database backup/restore and the full end-to-end demonstration are exercised successfully.
+
+## Completion evidence
+
+### M0 — Complete on 2026-10-04
+
+- Git repository initialized with `main` retaining the planning baseline and implementation isolated on `milestone/01-foundation`.
+- Approved design, end-to-end roadmap and the first executable implementation plan are stored under `docs/`.
+- Project scope records a fully simulated, Bangkok-wide C2C marketplace with exactly 50 initial dishes: 10 each from Thailand, Pakistan, Bangladesh, Nepal and India.
+
+### M1 — Complete on 2026-10-04
+
+- Django 5.2.17 runs against the healthy project-local PostgreSQL 17 Compose service; there is no SQLite fallback.
+- The custom `accounts.User` model, Django Admin registration, signup, protected profile, login, POST-only logout and enumeration-safe local password reset are implemented.
+- All 14 Django tests pass against PostgreSQL. `manage.py check`, `makemigrations --check --dry-run` and `migrate --check` pass.
+- `manage.py check --deploy` reports only the expected localhost-development warnings for `DEBUG`, HTTPS/HSTS and secure cookies; public deployment is outside the approved scope.
+- Playwright with local Chrome passed the complete account journey at 1440×900 plus the home page at 390×844. It found no console errors, page errors, failed responses or external requests.
+- The Codex in-app browser could not initialize because its local kernel assets were unavailable, so the documented Playwright/Chrome fallback was used and screenshots were inspected manually.
 
