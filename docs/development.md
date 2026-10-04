@@ -2,7 +2,7 @@
 
 ## Runtime architecture
 
-The browser connects to one server-rendered Django application. Django owns authentication, forms, templates and future marketplace workflows. PostgreSQL stores all persistent project data and runs in the `homebites-db` Docker container.
+The browser connects to one server-rendered Django application. Django owns authentication, forms, templates and marketplace workflows. PostgreSQL stores all persistent project data and runs in the `homebites-db` Docker container.
 
 The repository deliberately does not use SQLite, React, a separate REST API, Redis, Celery or live third-party services.
 
@@ -51,6 +51,8 @@ The named volume `homebites_postgres_data` persists database content. Removing t
 
 Create an administrator with `manage.py createsuperuser`. Ordinary users register at `/account/signup/`; their protected profile is at `/account/profile/`.
 
+Run `manage.py seed_demo` after migrations to create a fictional `demo_buyer` account, the fixed catalogue, Bangkok sample points, and seller slots/stock. The buyer starts with an unusable password. Set a local password interactively with `manage.py changepassword demo_buyer`; rerunning the seed preserves it. A pre-existing unmarked account named `demo_buyer` makes the command stop without adopting or modifying that account.
+
 Password reset uses Django's console email backend in development. Submitting the reset form prints the message and local reset link in the server terminal. Tests use Django's in-memory email backend. No external email is sent.
 
 ## Tests
@@ -65,6 +67,8 @@ docker compose up -d --wait db
 ```
 
 Django creates and removes a PostgreSQL test database. A test result is not accepted if PostgreSQL is unavailable or if the settings silently fall back to another database engine.
+
+For a focused demo-seed check, run `& .\.venv\Scripts\python.exe manage.py test demo.tests.test_seed_demo --noinput`. The [classroom handover](classroom-handover.md) has the walkthrough, requirement matrix and a restore drill that keeps the live database untouched.
 
 `manage.py check --deploy` is also run during milestone verification. Because this is a localhost development configuration with `DEBUG=true`, it is expected to warn about deployment-only HTTPS, secure-cookie and HSTS settings. Those warnings are recorded rather than suppressed; public deployment is explicitly out of scope.
 

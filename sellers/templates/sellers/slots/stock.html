@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}Portions for {{ listing.dish.name }} · HomeBites{% endblock %}
+{% block extra_styles %}<link rel="stylesheet" href="{% static 'sellers/seller.css' %}">{% endblock %}
+{% block content %}
+<section class="seller-form-page">
+<h1>Portions for {{ listing.dish.name }}</h1>
+<p>{{ slot.starts_at|date:"j M Y, H:i" }}–{{ slot.ends_at|date:"H:i" }} Bangkok time</p>
+{% if stock %}<p>Held: {{ stock.held }} · Committed: {{ stock.committed }} · Available: {{ stock.available }}</p>{% endif %}
+<p>Capacity cannot be reduced below portions already held or committed to orders.</p>
+<form method="post">
+  {% csrf_token %}
+  {{ form.as_p }}
+  <button type="submit">Save capacity</button>
+</form>
+<a href="{% url 'sellers:slots' %}">Back to slots</a>
+</section>
+{% endblock %}

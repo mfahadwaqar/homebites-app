@@ -7,12 +7,18 @@
   <title>{% block title %}HomeBites{% endblock %}</title>
   <link rel="icon" href="{% static 'images/homebites-mark.svg' %}" type="image/svg+xml">
   <link rel="stylesheet" href="{% static 'css/homebites.css' %}">
+  {% block extra_styles %}{% endblock %}
 </head>
 <body>
+  <a class="skip-link" href="#main-content">Skip to content</a>
   <header class="site-header">
     <a class="brand" href="/">HomeBites</a>
     <nav aria-label="Account">
+      <a href="{% url 'catalog:list' %}">Explore food</a>
       {% if user.is_authenticated %}
+        <a href="{% url 'orders:cart' %}">Cart</a>
+        <a href="{% url 'orders:list' %}">Orders</a>
+        <a href="{% url 'sellers:dashboard' %}">Sell</a>
         <a href="{% url 'accounts:profile' %}">Profile</a>
         <form method="post" action="{% url 'logout' %}">
           {% csrf_token %}
@@ -24,7 +30,8 @@
       {% endif %}
     </nav>
   </header>
-  <main class="page-shell">
+  <main class="page-shell" id="main-content" tabindex="-1">
+    {% if messages %}<div aria-live="polite">{% for message in messages %}<p class="form-alert">{{ message }}</p>{% endfor %}</div>{% endif %}
     {% block content %}{% endblock %}
   </main>
 </body>

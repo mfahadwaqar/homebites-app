@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}Reviews for {{ seller.storefront_name }} | HomeBites{% endblock %}
+{% block content %}
+<section class="account-panel" style="width:min(100%,760px)">
+  <p><a href="{% url 'sellers:storefront' seller.pk %}">← {{ seller.storefront_name }}</a></p>
+  <h1>Customer reviews</h1>
+  {% if summary.count %}
+    <p><strong>{{ summary.average|floatformat:1 }} / 5</strong> from {{ summary.count }} review{{ summary.count|pluralize }}</p>
+    {% for review in reviews %}
+      <article style="border-top:1px solid #e6dfeb;padding-block:1rem">
+        <h2 style="font-size:1.1rem;margin:0">{{ review.rating }} / 5</h2>
+        {% if review.comment %}<p>{{ review.comment }}</p>{% endif %}
+        <small>Verified completed order · {{ review.created_at|date:"j M Y" }}</small>
+      </article>
+    {% endfor %}
+  {% else %}
+    <p>No reviews yet.</p>
+  {% endif %}
+  <p><a href="{% url 'reviews:report_seller' seller.pk %}">Report this seller</a></p>
+</section>
+{% endblock %}

@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title %}Your cart | HomeBites{% endblock %}
+{% block content %}
+<section class="order-page">
+  <p class="eyebrow">Simulated marketplace</p>
+  <h1>Your cart</h1>
+  {% if items %}
+    <p>One seller and one collection window per order. Review ingredients before continuing.</p>
+    <p><strong>Seller:</strong> {{ cart.seller.storefront_name }} · <strong>Window:</strong> {{ cart.slot.get_order_type_display }} {{ cart.slot.starts_at|date:"M j, g:i A" }}</p>
+    <div class="order-stack">
+      {% for item in items %}
+        <article class="order-card">
+          <h2><a href="{% url 'catalog:detail' item.listing.pk %}">{{ item.listing.dish.name }}</a></h2>
+          <p>฿{{ item.listing.price }} per portion · {{ item.listing.dish.country.name }}</p>
+          <p><strong>Ingredients:</strong> {{ item.listing.ingredients|join:", " }}</p>
+          {% if item.acknowledged_ingredient_version != item.listing.ingredient_version or item.acknowledged_unit_price != item.listing.price %}<p class="form-alert">This offer changed. Update the quantity to reconfirm before checkout.</p>{% endif %}
+          <form method="post" action="{% url 'orders:update' item.pk %}">
+            {% csrf_token %}<label>Portions <input type="number" name="quantity" min="0" value="{{ item.quantity }}"></label>
+            <button type="submit">Update</button><span> Use 0 to remove.</span>
+          </form>
+        </article>
+      {% endfor %}
+    </div>
+    <div class="order-card">
+      <h2>Pickup or simulated delivery</h2>
+      <form method="post" action="{% url 'orders:quote' %}">
+        {% csrf_token %}
+        <label for="method">Method</label>
+        <select name="method" id="method">
+          <option value="pickup"{% if cart.method == 'pickup' %} selected{% endif %}>Pickup — free</option>
+          <option value="delivery"{% if cart.method == 'delivery' %} selected{% endif %}>Simulated Bangkok delivery</option>
+        </select>
+        <label for="destination">Delivery area (needed only for delivery)</label>
+        <select name="destination" id="destination"><option value="">Choose a demo Bangkok area</option>
+          {% for location in locations %}<option value="{{ location.pk }}"{% if cart.destination_id == location.pk %} selected{% endif %}>{{ location.label }}</option>{% endfor %}
+        </select>
+        <button type="submit">Calculate estimate</button>
+      </form>
+      {% if quote %}
+        <dl class="order-totals">
+          <div><dt>Food subtotal</dt><dd>฿{{ quote.food_subtotal }}</dd></div>
+          <div><dt>Delivery estimate</dt><dd>฿{{ quote.fee }}</dd></div>
+          <div><dt>Distance</dt><dd>{{ quote.distance_km }} km (simulated)</dd></div>
+        </dl>
+      {% elif cart.method == 'delivery' %}<p>Get a fresh delivery quote before checkout.</p>{% endif %}
+    </div>
+    <div class="order-card">
+      <h2>Place a demo order</h2>
+      <p>No real payment or delivery will occur. The platform commission is 10% of food subtotal; delivery charge is separate.</p>
+      <form method="post" action="{% url 'orders:checkout' %}">
+        {% csrf_token %}<input type="hidden" name="idempotency_key" value="{{ checkout_key }}">
+        <label for="payment_method">Payment simulation</label>
+        <select name="payment_method" id="payment_method" required>
+          {% if cart.method == 'pickup' %}<option value="cash_pickup">Cash on pickup</option>{% else %}<option value="cash_delivery">Cash on delivery</option>{% endif %}
+          <option value="mock_promptpay">Mock PromptPay</option>
+          <option value="mock_card">Mock card</option>
+        </select>
+        <button type="submit"{% if cart.method == 'delivery' and not quote %} disabled{% endif %}>Place simulated order</button>
+      </form>
+    </div>
+  {% else %}
+    <p>Your cart is empty. Browse the five cuisine groups to begin.</p>
+    <a href="{% url 'catalog:list' %}">Explore food</a>
+  {% endif %}
+</section>
+{% endblock %}

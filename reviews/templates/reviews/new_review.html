@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Review your order | HomeBites{% endblock %}
+{% block content %}
+<section class="account-panel">
+  <p><a href="{% url 'sellers:storefront' order.seller_id %}">← {{ order.seller.storefront_name }}</a></p>
+  <h1>Review order #{{ order.pk }}</h1>
+  <p>Your review will appear publicly after moderation.</p>
+  <form class="stacked-form" method="post">
+    {% csrf_token %}
+    {{ form.non_field_errors }}
+    <div class="field-group">
+      <label for="{{ form.rating.id_for_label }}">Rating</label>
+      {{ form.rating }}{{ form.rating.errors }}
+    </div>
+    <div class="field-group">
+      <label for="{{ form.comment.id_for_label }}">Comment (optional)</label>
+      {{ form.comment }}{{ form.comment.errors }}
+    </div>
+    <button type="submit">Submit review</button>
+  </form>
+</section>
+{% endblock %}

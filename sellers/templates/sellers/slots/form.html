@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}{{ heading }} · HomeBites{% endblock %}
+{% block extra_styles %}<link rel="stylesheet" href="{% static 'sellers/seller.css' %}">{% endblock %}
+{% block content %}
+<section class="seller-form-page">
+<h1>{{ heading }}</h1>
+<p>Times are entered in Bangkok local time.</p>
+<form method="post">
+  {% csrf_token %}
+  {{ form.as_p }}
+  <button type="submit">Save slot</button>
+</form>
+<a href="{% url 'sellers:slots' %}">Back to slots</a>
+</section>
+{% endblock %}

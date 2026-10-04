@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}{{ listing.dish.name }} | HomeBites{% endblock %}
+{% block content %}
+<link rel="stylesheet" href="{% static 'catalog/discovery.css' %}">
+<article class="catalog-page catalog-detail">
+  <a class="catalog-back" href="{% url 'catalog:list' %}">← All food</a>
+  <div class="catalog-detail__layout">
+    <div>
+      <div class="catalog-detail__art" aria-hidden="true">
+        {% if listing.image %}<img src="{{ listing.image.url }}" alt="">{% else %}{{ listing.dish.country.code }}{% endif %}
+      </div>
+      <p class="catalog-eyebrow">{{ listing.dish.country.name }} cuisine</p>
+      <h1>{{ listing.dish.name }}</h1>
+      <p class="catalog-detail__description">{{ listing.description|default:listing.dish.description }}</p>
+      <p class="catalog-detail__seller">Made by <a href="{% url 'sellers:storefront' listing.seller.pk %}">{{ listing.seller.storefront_name }}</a></p>
+      <p><a href="{% url 'reviews:seller_reviews' listing.seller.pk %}">Seller reviews</a> · <a href="{% url 'reviews:report_listing' listing.pk %}">Report this offer</a></p>
+    </div>
+    <aside class="catalog-detail__panel">
+      <p class="catalog-detail__price">฿{{ listing.price }}</p>
+      <h2>Ingredients for this offer</h2>
+      <p>Provided and reviewed by this seller. Check these before ordering.</p>
+      {% if listing.dietary_tags %}<p>Seller-declared dietary labels: {{ listing.dietary_tags|join:", " }}. Not an allergy or certification guarantee.</p>{% endif %}
+      <ul>
+        {% for ingredient in listing.ingredients %}<li>{{ ingredient }}</li>{% endfor %}
+      </ul>
+      {% if slots %}
+        <h2>Choose a collection window</h2>
+        <form method="post" action="{% url 'orders:add' listing.pk %}">
+          {% csrf_token %}
+          <label for="slot">Standard order or pre-order</label>
+          <select id="slot" name="slot" required>
+            {% for slot in slots %}<option value="{{ slot.pk }}">{{ slot.get_order_type_display }} · {{ slot.starts_at|date:"M j, g:i A" }} ({{ slot.available }} left)</option>{% endfor %}
+          </select>
+          <label for="quantity">Portions</label>
+          <input id="quantity" name="quantity" type="number" min="1" value="1" required>
+          <button type="submit">Add to cart</button>
+        </form>
+      {% else %}<p>No open order window yet. Check back later.</p>{% endif %}
+    </aside>
+  </div>
+</article>
+{% endblock %}

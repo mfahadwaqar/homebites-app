@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}Edit storefront · HomeBites{% endblock %}
+{% block extra_styles %}<link rel="stylesheet" href="{% static 'sellers/seller.css' %}">{% endblock %}
+{% block content %}
+<section class="seller-form-page">
+<h1>Edit storefront</h1>
+<form method="post">
+  {% csrf_token %}
+  {{ form.as_p }}
+  <button type="submit">Save storefront</button>
+</form>
+</section>
+{% endblock %}

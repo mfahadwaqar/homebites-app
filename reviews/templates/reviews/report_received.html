@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block title %}Report received | HomeBites{% endblock %}
+{% block content %}
+<section class="account-panel">
+  <h1>Report received</h1>
+  <p>Thanks. An administrator can review report #{{ report.pk }}.</p>
+  <p><a href="{% url 'catalog:list' %}">Explore food</a></p>
+</section>
+{% endblock %}

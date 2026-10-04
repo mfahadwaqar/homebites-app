@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}Seller dashboard · HomeBites{% endblock %}
+{% block extra_styles %}<link rel="stylesheet" href="{% static 'sellers/seller.css' %}">{% endblock %}
+{% block content %}
+<div class="seller-page">
+  <section class="seller-hero" aria-labelledby="seller-heading">
+    <div>
+      <p class="seller-eyebrow">Your home kitchen</p>
+      <h1 id="seller-heading">{{ seller.storefront_name }}</h1>
+      <p class="seller-lede">{{ seller.description|default:"Share your dishes with Bangkok customers." }}</p>
+      <div class="seller-meta"><span class="seller-pill">{{ seller.get_status_display }}</span><span>Pickup: {% if seller.pickup_location %}{{ seller.pickup_location.label }}{% else %}Select a location{% endif %}</span></div>
+    </div>
+    <a class="seller-primary-link" href="{% url 'sellers:listing_create' %}">Create an offer</a>
+  </section>
+  <nav class="seller-actions" aria-label="Seller tools">
+    <a href="{% url 'sellers:profile_edit' %}">Edit storefront</a>
+    {% if seller.can_sell %}<a href="{% url 'sellers:slots' %}">Time slots &amp; portions</a>{% endif %}
+    <a href="{% url 'orders_workflow:queue' %}">Manage orders</a>
+    <a href="{% url 'reviews:seller_reviews' seller.pk %}">See reviews</a>
+  </nav>
+  <section class="seller-section" aria-labelledby="seller-sales-heading">
+    <div class="seller-section-heading"><div><p class="seller-eyebrow">Demo figures</p><h2 id="seller-sales-heading">Completed sales</h2></div><p>Delivery charges are separate.</p></div>
+    <div class="seller-stat-grid">
+      <div class="seller-stat"><span>Completed orders</span><strong>{{ completed_orders }}</strong></div>
+      <div class="seller-stat"><span>Portions sold</span><strong>{{ portions_sold }}</strong></div>
+      <div class="seller-stat"><span>Food subtotal</span><strong>฿{{ food_subtotal }}</strong></div>
+      <div class="seller-stat"><span>Seller food earnings</span><strong>฿{{ seller_earnings }}</strong></div>
+    </div>
+    <p class="seller-fine-print">Platform commission: ฿{{ commission_total }} (10% of completed food sales).{% if rating_average %} Approved-review average: {{ rating_average|floatformat:1 }}/5.{% endif %}</p>
+  </section>
+  <section class="seller-section" aria-labelledby="seller-offers-heading">
+    <div class="seller-section-heading"><div><p class="seller-eyebrow">Catalogue</p><h2 id="seller-offers-heading">Your offers</h2></div><a href="{% url 'sellers:listing_create' %}">Add an offer</a></div>
+    <ul class="seller-offer-list">
+      {% for listing in listings %}<li><div><strong>{{ listing.dish.name }}</strong><span>{{ listing.get_status_display }} · ฿{{ listing.price }}</span></div><a href="{% url 'sellers:listing_edit' listing.pk %}">Edit offer <span aria-hidden="true">→</span></a></li>
+      {% empty %}<li class="seller-empty">No offers yet. Choose one of the approved dishes to begin.</li>{% endfor %}
+    </ul>
+  </section>
+</div>
+{% endblock %}

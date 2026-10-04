@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}Seller order #{{ order.pk }} · HomeBites{% endblock %}
+{% block extra_styles %}<link rel="stylesheet" href="{% static 'orders/workflow.css' %}">{% endblock %}
+{% block content %}
+<div class="workflow-page">
+  <a class="workflow-back" href="{% url 'orders_workflow:queue' %}">← Seller orders</a>
+  <header class="workflow-heading workflow-heading--detail">
+    <div><p class="workflow-eyebrow">Simulated fulfillment</p><h1>Order #{{ order.pk }}</h1><p>Buyer: {{ order.buyer }} · {{ order.get_fulfillment_method_display }} · {{ order.slot.starts_at|date:"j M Y, H:i" }}–{{ order.slot.ends_at|date:"H:i" }} Bangkok time</p></div>
+    <span class="workflow-status">{{ order.get_status_display }}</span>
+  </header>
+  <div class="workflow-columns">
+    <div>
+      <section class="workflow-card"><h2>Order snapshot</h2>
+        <ul class="workflow-items">
+          {% for item in order.items.all %}<li><strong>{{ item.quantity }} × {{ item.dish_name_snapshot }}</strong><span>{{ item.country_snapshot }} · ฿{{ item.line_total }}</span><p>Ingredients: {{ item.ingredients_snapshot|join:", " }}</p></li>{% endfor %}
+        </ul>
+      </section>
+      <section class="workflow-card"><h2>Handoff location</h2><p>Seller pickup: {{ order.origin_snapshot|default:"Not recorded" }}</p>
+        {% if order.destination_snapshot %}<p>Simulated delivery destination: {{ order.destination_snapshot }}</p>{% else %}<p>Customer selected pickup.</p>{% endif %}
+        <p>This is a classroom simulation, not live courier tracking.</p>
+      </section>
+    </div>
+    <aside class="workflow-card workflow-summary"><h2>Totals and actions</h2>
+      <dl><div><dt>Food</dt><dd>฿{{ order.food_subtotal }}</dd></div><div><dt>Simulated delivery</dt><dd>฿{{ order.delivery_fee }}</dd></div><div class="workflow-total"><dt>Customer total</dt><dd>฿{{ order.customer_total }}</dd></div></dl>
+      <p>Payment: {{ order.get_payment_method_display }}</p>
+      {% if order.status == "cash_due" or order.status == "awaiting_seller" %}
+        <form method="post" action="{% url 'orders_workflow:accept' order.pk %}">{% csrf_token %}<button type="submit">Confirm order</button></form>
+      {% endif %}
+      {% if order.status == "confirmed" %}
+        <form method="post" action="{% url 'orders_workflow:handoff' order.pk %}">
+          {% csrf_token %}
+          {% if order.fulfillment_method == "pickup" %}<button type="submit">Record simulated pickup handoff and cash collection</button>{% else %}<button type="submit">Record simulated delivery handoff and cash collection</button>{% endif %}
+        </form>
+      {% endif %}
+      {% if order.status == "cash_due" or order.status == "awaiting_seller" or order.status == "confirmed" %}
+        <form class="workflow-reject-form" method="post" action="{% url 'orders_workflow:reject' order.pk %}">
+          {% csrf_token %}<label for="rejection-reason">Reason for rejection</label><textarea id="rejection-reason" name="reason" rows="3" required></textarea><button class="workflow-secondary-button" type="submit">Reject order</button>
+        </form>
+      {% endif %}
+    </aside>
+  </div>
+</div>
+{% endblock %}

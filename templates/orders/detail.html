@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}Order #{{ order.pk }} | HomeBites{% endblock %}
+{% block content %}
+<section class="order-page"><a href="{% url 'orders:list' %}">← Your orders</a><h1>Order #{{ order.pk }}</h1>
+  <p><strong>Status:</strong> {{ order.get_status_display }} · <strong>Seller:</strong> {{ order.seller.storefront_name }}</p>
+  <p>{{ order.slot.get_order_type_display }} · {{ order.slot.starts_at|date:"M j, g:i A" }} · {{ order.get_fulfillment_method_display }}{% if order.destination_snapshot %} to {{ order.destination_snapshot }}{% endif %}</p>
+  <div class="order-card"><h2>Dishes and ingredient snapshots</h2>
+    {% for item in items %}<p><strong>{{ item.dish_name_snapshot }}</strong> × {{ item.quantity }} — ฿{{ item.line_total }}<br>{{ item.ingredients_snapshot|join:", " }}</p>{% endfor %}
+  </div>
+  <div class="order-card"><h2>Simulated totals</h2>
+    <dl class="order-totals"><div><dt>Food</dt><dd>฿{{ order.food_subtotal }}</dd></div><div><dt>Delivery</dt><dd>฿{{ order.delivery_fee }}</dd></div><div><dt>Total</dt><dd>฿{{ order.customer_total }}</dd></div><div><dt>Platform commission (10% of food)</dt><dd>฿{{ order.commission }}</dd></div></dl>
+    <p>No real payment or courier is involved.</p>
+  </div>
+  <div class="order-card"><h2>Order timeline</h2>
+    <ol>{% for event in order.events.all %}
+      <li><time datetime="{{ event.occurred_at|date:'c' }}">{{ event.occurred_at|date:"M j, Y g:i A" }} Bangkok time</time> · {{ event.get_status_display }}{% if event.note %} — {{ event.note }}{% endif %}</li>
+    {% empty %}<li>Order created {{ order.created_at|date:"M j, Y g:i A" }} Bangkok time.</li>{% endfor %}</ol>
+  </div>
+  {% if order.status == 'pending_payment' %}<p><a href="{% url 'payments:pay' order.pk %}">Choose a mock payment outcome</a> to continue.</p>{% endif %}
+  {% if order.status == 'completed' %}<p><a href="{% url 'reviews:new' order.pk %}">Review this completed order</a></p>{% endif %}
+  {% if order.status == 'pending_payment' or order.status == 'cash_due' or order.status == 'awaiting_seller' %}
+    <form method="post" action="{% url 'orders:cancel' order.pk %}">{% csrf_token %}<button type="submit">Cancel order</button></form>
+  {% endif %}
+</section>
+{% endblock %}

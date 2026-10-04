@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Report content | HomeBites{% endblock %}
+{% block content %}
+<section class="account-panel">
+  <h1>Report {% if listing %}{{ listing.dish.name }}{% else %}{{ seller.storefront_name }}{% endif %}</h1>
+  <p>Describe the concern for a HomeBites administrator to review.</p>
+  <form class="stacked-form" method="post">
+    {% csrf_token %}
+    <div class="field-group">
+      <label for="{{ form.reason.id_for_label }}">What is the concern?</label>
+      {{ form.reason }}{{ form.reason.errors }}
+    </div>
+    <button type="submit">Send report</button>
+  </form>
+</section>
+{% endblock %}

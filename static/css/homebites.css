@@ -203,5 +203,21 @@ button:focus-visible {
   }
 }
 
+.skip-link { position: absolute; z-index: 20; left: 1rem; top: -5rem; padding: .65rem .9rem; background: #fff; border: 2px solid var(--ink); border-radius: .4rem; }
+.skip-link:focus { top: .5rem; }
+
+.order-page { max-width: 880px; margin-inline: auto; padding-block: 2rem 5rem; }
+.order-page h1 { font-size: clamp(2.2rem, 5vw, 4rem); line-height: 1.1; }
+.order-stack { display: grid; gap: 1rem; }
+.order-card { background: #fff; border: 1px solid #e5dfed; border-radius: 1rem; padding: clamp(1rem, 3vw, 2rem); margin-block: 1rem; box-shadow: 0 8px 30px #2314400d; }
+.order-card h2 { margin-top: 0; }
+.order-card form { display: grid; gap: .7rem; max-width: 34rem; }
+.order-card input, .order-card select { min-height: 2.5rem; border: 1px solid #8a7fb0; border-radius: .4rem; padding: .4rem .65rem; font: inherit; background: #fff; }
+.order-card button, .order-page button { width: fit-content; min-height: 2.6rem; padding: .55rem 1rem; background: var(--ink); color: #fff; border: 0; border-radius: .4rem; font: inherit; font-weight: 700; cursor: pointer; }
+.order-card button:disabled { opacity: .5; cursor: not-allowed; }
+.order-totals { display: grid; gap: .4rem; }
+.order-totals div { display: flex; justify-content: space-between; gap: 1rem; border-bottom: 1px solid #e5dfed; padding-block: .35rem; }
+.order-totals dd { margin: 0; font-weight: 700; }
+
 
 

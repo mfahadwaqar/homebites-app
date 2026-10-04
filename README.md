@@ -2,20 +2,19 @@
 
 HomeBites is a locally runnable university demonstration of a Bangkok-wide marketplace for homemade and independent food. It uses real Django and PostgreSQL records while clearly simulating payments, delivery progress and location pricing.
 
-The confirmed catalogue scope is 50 dishes: 10 each from Thailand, Pakistan, Bangladesh, Nepal and India. Ingredient lists are required on seller offers and will be added in Milestone M2.
+The fixed catalogue contains 50 dishes: 10 each from Thailand, Pakistan, Bangladesh, Nepal and India. Each seller offer has its own reviewed ingredient list.
 
 ## Current status
 
-Milestones M0 and M1 are complete. The next implementation slice is M2: Sellers and fixed food catalogue. The current implementation includes:
+The repository includes the following local demonstration flows:
 
 - Django 5.2 LTS and PostgreSQL 17.
-- A custom HomeBites user model.
-- Registration, login, POST-only logout and a protected profile.
-- Local password-reset email preview.
-- Django Admin user management.
-- Automated tests running against PostgreSQL.
+- Customer accounts, food discovery, a single-seller cart, simulated checkout and order tracking.
+- Seller approval, offers, slots, stock, order handling and simulated sales statistics.
+- Mock payments, eligible reviews, content reports and staff moderation.
+- An idempotent offline demo seed with 50 offers, five pickup points and 100 initial stock records.
 
-See [the milestone roadmap](docs/milestones.md) and [the complete implementation plan](docs/homebites-implementation-plan.md).
+The [milestone roadmap](docs/milestones.md) records what has actually been verified. See the [classroom handover](docs/classroom-handover.md) for the walkthrough, evidence matrix and backup procedure.
 
 ## Requirements
 
@@ -41,7 +40,11 @@ py -3.13 -m venv .venv
 docker compose up -d --wait db
 & .\.venv\Scripts\python.exe manage.py migrate
 & .\.venv\Scripts\python.exe manage.py createsuperuser
+& .\.venv\Scripts\python.exe manage.py seed_demo
+& .\.venv\Scripts\python.exe manage.py changepassword demo_buyer
 ```
+
+`seed_demo` creates a fictional buyer with an unusable password. `changepassword` prompts for a local password without placing it in the command or repository. Re-running the seed preserves that password, stock usage and current slot IDs. Do not use a personal password for classroom accounts.
 
 ## Run locally
 
@@ -60,7 +63,7 @@ Open <http://127.0.0.1:8000/>. Keep the site on localhost; this prototype is not
 & .\.venv\Scripts\python.exe manage.py makemigrations --check --dry-run
 ```
 
-Detailed setup, troubleshooting and development decisions are in [docs/development.md](docs/development.md).
+Detailed setup and troubleshooting are in [docs/development.md](docs/development.md). The [classroom handover](docs/classroom-handover.md) explains the full scenario and its current verification limits.
 
 ## Stop the database
 

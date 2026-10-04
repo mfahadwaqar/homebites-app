@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}Apply to sell · HomeBites{% endblock %}
+{% block extra_styles %}<link rel="stylesheet" href="{% static 'sellers/seller.css' %}">{% endblock %}
+{% block content %}
+<section class="seller-form-page">
+<h1>Apply to sell</h1>
+<p>Your storefront remains pending until an administrator approves it.</p>
+<form method="post">
+  {% csrf_token %}
+  {{ form.as_p }}
+  <button type="submit">Submit application</button>
+</form>
+</section>
+{% endblock %}

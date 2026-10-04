@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+
+{% block title %}Simulated payment · HomeBites{% endblock %}
+
+{% block content %}
+<section class="order-page" aria-labelledby="payment-title">
+  <p class="intro__label">University demo · no real transaction</p>
+  <h1 id="payment-title">Payment for order #{{ order.pk }}</h1>
+  <p>Every payment and delivery step on HomeBites is simulated. Never enter actual card or banking details.</p>
+  <div class="order-card"><dl class="order-totals">
+    <div><dt>Amount shown</dt><dd>฿{{ order.customer_total }}</dd></div>
+    <div><dt>Method</dt><dd>{{ order.get_payment_method_display }}</dd></div>
+    <div><dt>Order status</dt><dd>{{ order.get_status_display }}</dd></div>
+  </dl></div>
+
+  {% if order.payment_method == "cash_delivery" or order.payment_method == "cash_pickup" %}
+    <p>Cash is marked as due in this demo. The seller will record a simulated collection at handoff. Do not pay anyone through this website.</p>
+  {% elif order.status == "pending_payment" and attempt and attempt.state == "pending" %}
+    <div class="order-card" role="note">
+      <strong>DEMO ONLY — NOT PAYABLE</strong><br>
+      {% if order.payment_method == "mock_promptpay" %}
+        This is a mock PromptPay reference, not a scannable QR code.<br>
+      {% else %}
+        This is a mock card gateway. No card number, expiry date or security code is requested.<br>
+      {% endif %}
+      Reference: {{ attempt.mock_reference }}
+    </div>
+    <p>Choose an outcome to demonstrate the checkout flow:</p>
+    <form class="order-card" method="post" action="{% url 'payments:result' order.pk %}">
+      {% csrf_token %}
+      <input type="hidden" name="amount" value="{{ order.customer_total }}">
+      <button type="submit" name="outcome" value="succeeded">Simulate success</button>
+      <button type="submit" name="outcome" value="failed">Simulate failure</button>
+      <button type="submit" name="outcome" value="pending">Keep pending</button>
+    </form>
+    <p>Hold expires {{ order.hold_expires_at|date:"j M Y, H:i" }} (Bangkok time).</p>
+  {% elif attempt %}
+    <p>Mock payment state: {{ attempt.get_state_display }}.</p>
+    {% if attempt.state == "failed" %}<p>Start a new checkout to retry after fresh stock and timing checks.</p>{% endif %}
+  {% else %}
+    <p>No payable mock attempt is available for this order.</p>
+  {% endif %}
+  <p><a href="{% url 'orders:detail' order.pk %}">Back to order</a></p>
+</section>
+{% endblock %}
