@@ -1,25 +1,51 @@
 {% extends "base.html" %}
 {% block title %}Order #{{ order.pk }} | HomeBites{% endblock %}
 {% block content %}
-<section class="order-page"><a href="{% url 'orders:list' %}">← Your orders</a><h1>Order #{{ order.pk }}</h1>
-  <p><strong>Status:</strong> {{ order.get_status_display }} · <strong>Seller:</strong> {{ order.seller.storefront_name }}</p>
-  <p>{{ order.slot.get_order_type_display }} · {{ order.slot.starts_at|date:"M j, g:i A" }} · {{ order.get_fulfillment_method_display }}{% if order.destination_snapshot %} to {{ order.destination_snapshot }}{% endif %}</p>
-  <div class="order-card"><h2>Dishes and ingredient snapshots</h2>
-    {% for item in items %}<p><strong>{{ item.dish_name_snapshot }}</strong> × {{ item.quantity }} — ฿{{ item.line_total }}<br>{{ item.ingredients_snapshot|join:", " }}</p>{% endfor %}
+<section class="checkout-page">
+  <p><a href="{% url 'orders:list' %}">← Your orders</a></p>
+  <h1>Order #{{ order.pk }}</h1>
+  <ol class="order-steps" aria-label="Order progress">
+    {% for step in presentation.steps %}<li class="order-steps__item order-steps__item--{{ step.state }}"><span class="order-steps__dot" aria-hidden="true"></span>{{ step.label }}</li>{% endfor %}
+  </ol>
+  <p class="order-guidance">{{ presentation.next_action }}</p>
+
+  <div class="checkout-layout">
+    <div class="checkout-main">
+      <div class="pay-card">
+        <h2>Status</h2>
+        <dl class="pay-facts">
+          <div><dt>Status</dt><dd>{{ order.display_status }}</dd></div>
+          <div><dt>Seller</dt><dd>{{ order.seller.storefront_name }}</dd></div>
+          <div><dt>Payment status</dt><dd>{{ presentation.payment_label }}</dd></div>
+          <div><dt>Fulfillment status</dt><dd>{{ presentation.fulfillment_label }}</dd></div>
+          <div><dt>Window</dt><dd>{{ order.slot.get_order_type_display }} · {{ order.slot.starts_at|date:"j M Y, g:i A" }} – {{ order.slot.ends_at|date:"j M Y, g:i A" }} Bangkok time</dd></div>
+          <div><dt>Method</dt><dd>{{ order.get_fulfillment_method_display }}{% if order.origin_snapshot %} from {{ order.origin_snapshot }}{% endif %}{% if order.destination_snapshot %} to {{ order.destination_snapshot }}{% endif %}</dd></div>
+        </dl>
+      </div>
+      <div class="pay-card"><h2>Dishes and ingredient snapshots</h2>
+        {% for item in items %}<p><strong>{{ item.dish_name_snapshot }}</strong> × {{ item.quantity }}, ฿{{ item.line_total }}<br><span class="pay-card__meta">{{ item.ingredients_snapshot|join:", " }}</span></p>{% endfor %}
+      </div>
+      <div class="pay-card"><h2>Order timeline</h2>
+        <ol class="timeline">{% for event in order.events.all %}
+          <li><time datetime="{{ event.occurred_at|date:'c' }}">{{ event.occurred_at|date:"M j, Y g:i A" }} Bangkok time</time> · {{ event.get_status_display }}{% if event.note %}: {{ event.note }}{% endif %}</li>
+        {% empty %}<li>Order created {{ order.created_at|date:"M j, Y g:i A" }} Bangkok time.</li>{% endfor %}</ol>
+      </div>
+    </div>
+
+    <aside class="checkout-side">
+      <div class="pay-card summary">
+        <h2>Order totals</h2>
+        <dl class="order-totals"><div><dt>Food</dt><dd>฿{{ order.food_subtotal }}</dd></div><div><dt>Delivery</dt><dd>฿{{ order.delivery_fee }}</dd></div><div class="order-totals__total"><dt>Total</dt><dd>฿{{ order.customer_total }}</dd></div><div><dt>Platform commission (10% of food)</dt><dd>฿{{ order.commission }}</dd></div></dl>
+        <p class="pay-card__meta">The commission is deducted from seller food earnings; it is not an extra charge to the customer. Seller food earnings: ฿{{ order.seller_food_earnings }}. Delivery is separate.</p>
+        <p><a class="primary-link" href="{% url 'orders:receipt' order.pk %}">View receipt</a></p>
+        {% if presentation.can_pay %}<p><a href="{% url 'payments:pay' order.pk %}">Complete your payment</a> to continue. Hold expires {{ order.hold_expires_at|date:"j M Y, g:i A" }} Bangkok time.</p>{% endif %}
+        {% if can_review %}<p><a href="{% url 'reviews:new' order.pk %}">Review this completed order</a></p>{% elif review %}<p>Your review: {{ review.get_status_display }}. Only approved reviews appear publicly.</p>{% endif %}
+        {% if order.status == 'payment_failed' or order.status == 'expired' or order.status == 'pending_payment' and not presentation.can_pay %}<p>Start again after checking current availability:</p><ul>{% for item in items %}<li><a href="{% url 'catalog:detail' item.listing_id %}">{{ item.dish_name_snapshot }}</a></li>{% endfor %}</ul>{% endif %}
+        {% if order.status == 'pending_payment' or order.status == 'cash_due' or order.status == 'awaiting_seller' %}
+          <form method="post" action="{% url 'orders:cancel' order.pk %}">{% csrf_token %}<button class="btn-secondary" type="submit">Cancel order</button></form>
+        {% endif %}
+      </div>
+    </aside>
   </div>
-  <div class="order-card"><h2>Simulated totals</h2>
-    <dl class="order-totals"><div><dt>Food</dt><dd>฿{{ order.food_subtotal }}</dd></div><div><dt>Delivery</dt><dd>฿{{ order.delivery_fee }}</dd></div><div><dt>Total</dt><dd>฿{{ order.customer_total }}</dd></div><div><dt>Platform commission (10% of food)</dt><dd>฿{{ order.commission }}</dd></div></dl>
-    <p>No real payment or courier is involved.</p>
-  </div>
-  <div class="order-card"><h2>Order timeline</h2>
-    <ol>{% for event in order.events.all %}
-      <li><time datetime="{{ event.occurred_at|date:'c' }}">{{ event.occurred_at|date:"M j, Y g:i A" }} Bangkok time</time> · {{ event.get_status_display }}{% if event.note %} — {{ event.note }}{% endif %}</li>
-    {% empty %}<li>Order created {{ order.created_at|date:"M j, Y g:i A" }} Bangkok time.</li>{% endfor %}</ol>
-  </div>
-  {% if order.status == 'pending_payment' %}<p><a href="{% url 'payments:pay' order.pk %}">Choose a mock payment outcome</a> to continue.</p>{% endif %}
-  {% if order.status == 'completed' %}<p><a href="{% url 'reviews:new' order.pk %}">Review this completed order</a></p>{% endif %}
-  {% if order.status == 'pending_payment' or order.status == 'cash_due' or order.status == 'awaiting_seller' %}
-    <form method="post" action="{% url 'orders:cancel' order.pk %}">{% csrf_token %}<button type="submit">Cancel order</button></form>
-  {% endif %}
 </section>
 {% endblock %}

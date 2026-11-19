@@ -87,7 +87,7 @@ class SimulatedPaymentTests(PaymentFixture, TestCase):
         self.assertEqual(order.status, Order.Status.AWAITING_SELLER)
         self.assertEqual((stock.held, stock.committed), (0, 1))
         self.assertEqual(reservation.state, InventoryReservation.State.COMMITTED)
-        self.assertTrue(attempt.mock_reference.startswith("DEMO-"))
+        self.assertTrue(attempt.mock_reference.startswith("HB-"))
         self.assertTrue(OrderStatusEvent.objects.filter(order=order, status=Order.Status.AWAITING_SELLER).exists())
 
     def test_failure_releases_once_and_retry_cannot_resurrect_order(self):
@@ -203,7 +203,7 @@ class PaymentPageTests(PaymentFixture, TestCase):
         self.client.force_login(self.buyer)
         response = self.client.get(reverse("payments:pay", args=[order.pk]))
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "DEMO")
+        self.assertContains(response, "paid ฿")
         self.assertNotContains(response, 'name="card_number"')
         self.assertNotContains(response, 'name="cvv"')
         self.assertEqual(PaymentAttempt.objects.filter(order=order).count(), 1)
@@ -235,4 +235,4 @@ class PaymentPageTests(PaymentFixture, TestCase):
 
         response = self.client.get(reverse("payments:pay", args=[order.pk]))
         self.assertEqual(response.status_code, 200)
-        self.assertNotContains(response, "Simulate success")
+        self.assertNotContains(response, "Pay ฿")

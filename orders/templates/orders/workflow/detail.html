@@ -6,8 +6,8 @@
 <div class="workflow-page">
   <a class="workflow-back" href="{% url 'orders_workflow:queue' %}">← Seller orders</a>
   <header class="workflow-heading workflow-heading--detail">
-    <div><p class="workflow-eyebrow">Simulated fulfillment</p><h1>Order #{{ order.pk }}</h1><p>Buyer: {{ order.buyer }} · {{ order.get_fulfillment_method_display }} · {{ order.slot.starts_at|date:"j M Y, H:i" }}–{{ order.slot.ends_at|date:"H:i" }} Bangkok time</p></div>
-    <span class="workflow-status">{{ order.get_status_display }}</span>
+    <div><p class="workflow-eyebrow">Fulfillment</p><h1>Order #{{ order.pk }}</h1><p>Buyer: {{ order.buyer }} · {{ order.get_fulfillment_method_display }} · {{ order.slot.starts_at|date:"j M Y, H:i" }}–{{ order.slot.ends_at|date:"H:i" }} Bangkok time</p></div>
+    <span class="workflow-status">{{ order.display_status }}</span>
   </header>
   <div class="workflow-columns">
     <div>
@@ -17,23 +17,23 @@
         </ul>
       </section>
       <section class="workflow-card"><h2>Handoff location</h2><p>Seller pickup: {{ order.origin_snapshot|default:"Not recorded" }}</p>
-        {% if order.destination_snapshot %}<p>Simulated delivery destination: {{ order.destination_snapshot }}</p>{% else %}<p>Customer selected pickup.</p>{% endif %}
-        <p>This is a classroom simulation, not live courier tracking.</p>
+        {% if order.destination_snapshot %}<p>Delivery destination: {{ order.destination_snapshot }}</p>{% else %}<p>Customer selected pickup.</p>{% endif %}
+        <p>Delivery progress is updated by the seller; it is not live courier tracking.</p>
       </section>
     </div>
     <aside class="workflow-card workflow-summary"><h2>Totals and actions</h2>
-      <dl><div><dt>Food</dt><dd>฿{{ order.food_subtotal }}</dd></div><div><dt>Simulated delivery</dt><dd>฿{{ order.delivery_fee }}</dd></div><div class="workflow-total"><dt>Customer total</dt><dd>฿{{ order.customer_total }}</dd></div></dl>
+      <dl><div><dt>Food</dt><dd>฿{{ order.food_subtotal }}</dd></div><div><dt>Delivery</dt><dd>฿{{ order.delivery_fee }}</dd></div><div class="workflow-total"><dt>Customer total</dt><dd>฿{{ order.customer_total }}</dd></div></dl>
       <p>Payment: {{ order.get_payment_method_display }}</p>
       {% if order.status == "cash_due" or order.status == "awaiting_seller" %}
         <form method="post" action="{% url 'orders_workflow:accept' order.pk %}">{% csrf_token %}<button type="submit">Confirm order</button></form>
       {% endif %}
-      {% if order.status == "confirmed" %}
-        <form method="post" action="{% url 'orders_workflow:handoff' order.pk %}">
+      {% if next_step %}
+        <form method="post" action="{% if next_step.0 == 'complete' %}{% url 'orders_workflow:handoff' order.pk %}{% else %}{% url 'orders_workflow:advance' order.pk %}{% endif %}">
           {% csrf_token %}
-          {% if order.fulfillment_method == "pickup" %}<button type="submit">Record simulated pickup handoff and cash collection</button>{% else %}<button type="submit">Record simulated delivery handoff and cash collection</button>{% endif %}
+          <button type="submit">{{ next_step.1 }}</button>
         </form>
       {% endif %}
-      {% if order.status == "cash_due" or order.status == "awaiting_seller" or order.status == "confirmed" %}
+      {% if order.status == "cash_due" or order.status == "awaiting_seller" or order.status == "confirmed" or order.status == "preparing" %}
         <form class="workflow-reject-form" method="post" action="{% url 'orders_workflow:reject' order.pk %}">
           {% csrf_token %}<label for="rejection-reason">Reason for rejection</label><textarea id="rejection-reason" name="reason" rows="3" required></textarea><button class="workflow-secondary-button" type="submit">Reject order</button>
         </form>

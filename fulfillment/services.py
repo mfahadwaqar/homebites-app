@@ -9,7 +9,7 @@ from django.core.exceptions import ValidationError
 from .models import DeliveryTariff, DemoLocation
 
 
-SIMULATION_LABEL = "Simulated distance and delivery charge"
+SIMULATION_LABEL = "Estimated distance and delivery charge"
 _EARTH_RADIUS_KM = 6371.0088
 _DISTANCE_PRECISION = Decimal("0.0001")
 _QUOTE_PRECISION = Decimal("0.01")

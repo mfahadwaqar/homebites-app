@@ -1,19 +1,53 @@
 {% extends "base.html" %}
 {% load static %}
 {% block title %}{{ seller.storefront_name }} · HomeBites{% endblock %}
-{% block extra_styles %}<link rel="stylesheet" href="{% static 'sellers/seller.css' %}">{% endblock %}
+{% block extra_styles %}<link rel="stylesheet" href="{% static 'catalog/discovery.css' %}?v=20261022-2"><link rel="stylesheet" href="{% static 'sellers/seller.css' %}?v=20261022">{% endblock %}
 {% block content %}
-<section class="seller-page">
-<h1>{{ seller.storefront_name }}</h1>
-<p>{{ seller.description }}</p>
-<p><a href="{% url 'reviews:seller_reviews' seller.pk %}">Customer reviews</a> · <a href="{% url 'reviews:report_seller' seller.pk %}">Report this seller</a></p>
-<h2>Available offers</h2>
-<ul>
+<div class="seller-page storefront-page">
+  <a class="catalog-back" href="{% url 'catalog:list' %}">← Explore all food</a>
+  <section class="storefront-hero" aria-labelledby="kitchen-name">
+    <div class="storefront-hero__intro">
+      <p class="seller-eyebrow">An independent home kitchen · Bangkok</p>
+      <h1 id="kitchen-name">{{ seller.storefront_name }}</h1>
+      <p class="seller-lede">{{ seller.description|default:"Explore the dishes from this home kitchen." }}</p>
+      <div class="storefront-hero__links"><a class="primary-link" href="#kitchen-menu">Explore the menu <span aria-hidden="true">↓</span></a><a href="{% url 'reviews:seller_reviews' seller.pk %}">Customer reviews <span aria-hidden="true">↗</span></a></div>
+    </div>
+    <aside class="storefront-handoff" aria-label="Pickup information">
+      <p class="seller-eyebrow">From this kitchen</p>
+      <h2>{% if seller.pickup_location %}{{ seller.pickup_location.label }}{% else %}Pickup details to follow{% endif %}</h2>
+      <p>{% if seller.pickup_location %}Pickup point · Bangkok{% else %}Check each dish for fulfillment options.{% endif %}</p>
+      <div class="storefront-handoff__note">Choose a dish to see its ingredients, available portions and order windows.</div>
+    </aside>
+  </section>
+  <section class="storefront-stats" aria-label="Kitchen ratings">
+    <div><strong>{% if summary.count %}{{ summary.average|floatformat:1 }}{% else %}New{% endif %}</strong><span>{% if summary.count %}out of 5 average rating{% else %}no ratings yet{% endif %}</span></div>
+    <div><strong>{{ summary.count }}</strong><span>customer review{{ summary.count|pluralize }}</span></div>
+    <div><strong>{{ completed_orders }}</strong><span>completed order{{ completed_orders|pluralize }}</span></div>
+  </section>
+  <section id="kitchen-menu" aria-labelledby="menu-heading">
+    <div class="catalog-results-heading"><div><p class="seller-eyebrow">Made in this kitchen</p><h2 id="menu-heading">Food offers</h2></div><span>{{ listings|length }} dish{{ listings|length|pluralize:"es" }} to explore</span></div>
+    <div class="catalog-grid">
   {% for listing in listings %}
-    <li><a href="{% url 'catalog:detail' listing.pk %}">{{ listing.dish.name }}</a> · {{ listing.dish.country.name }} · ฿{{ listing.price }}</li>
+      {% include 'catalog/_food_card.html' with storefront=True %}
   {% empty %}
-    <li>No offers are currently available.</li>
+      <div class="catalog-empty"><p class="seller-eyebrow">The menu is quiet for now</p><h3>No offers are currently available.</h3><p>This kitchen has no published food offers. You can explore the other home kitchens in the meantime.</p><a class="seller-primary-link" href="{% url 'catalog:list' %}">Explore other food</a></div>
   {% endfor %}
-</ul>
-</section>
+    </div>
+  </section>
+  {% if recent_reviews %}
+  <section class="storefront-reviews" aria-labelledby="kitchen-reviews-heading">
+    <div class="catalog-results-heading"><h2 id="kitchen-reviews-heading">What customers say</h2><a href="{% url 'reviews:seller_reviews' seller.pk %}">All reviews</a></div>
+    <div class="storefront-reviews__grid">
+      {% for review in recent_reviews %}
+        <article class="dish-review">
+          <p class="dish-review__head"><strong>{{ review.order.buyer.first_name|default:"Customer" }}{% if review.order.buyer.last_name %} {{ review.order.buyer.last_name|slice:":1" }}.{% endif %}</strong> <span>{{ review.rating }} out of 5</span></p>
+          {% if review.comment %}<p>{{ review.comment }}</p>{% endif %}
+          <small>{% for item in review.order.items.all|slice:":1" %}{{ item.dish_name_snapshot }} · {% endfor %}{{ review.created_at|date:"j M Y" }}</small>
+        </article>
+      {% endfor %}
+    </div>
+  </section>
+  {% endif %}
+  <footer class="storefront-footer"><p>Dishes and ingredients are listed by the cook.</p><a href="{% url 'reviews:report_seller' seller.pk %}">Report this seller</a></footer>
+</div>
 {% endblock %}

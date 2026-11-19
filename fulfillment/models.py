@@ -39,4 +39,4 @@ class DeliveryTariff(models.Model):
         ordering = ["-version"]
 
     def __str__(self):
-        return f"Simulated delivery tariff v{self.version}"
+        return f"Delivery tariff v{self.version}"

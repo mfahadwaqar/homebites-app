@@ -20,7 +20,7 @@ docker compose up -d --wait db
 & .\.venv\Scripts\python.exe manage.py createsuperuser
 & .\.venv\Scripts\python.exe manage.py seed_demo
 & .\.venv\Scripts\python.exe manage.py changepassword demo_buyer
-& .\.venv\Scripts\python.exe manage.py runserver 127.0.0.1:8000
+& .\scripts\start-demo.ps1
 ```
 
 `changepassword` prompts twice; choose a unique classroom-only password. The seed creates `demo_buyer` with an unusable password, never prints a usable one, and preserves a password set later. Seeded seller accounts have unusable passwords. Do not use personal passwords for this demo. The seed refuses to adopt an unrelated account already named `demo_buyer`.
@@ -28,6 +28,8 @@ docker compose up -d --wait db
 The seed creates five countries, 50 master dishes and 50 public offers with seller-specific ingredients. Eight fictional Bangkok locations support quotes. Five seller pickup points are assigned at Ari, Asok, Silom, Chatuchak and Bang Na. Each seeded seller receives one standard and one pre-order slot; all 50 offers receive 20 portions in each slot. Running the command again preserves used stock and current slot IDs. An expired slot rotates to a new future slot while its old stock remains for historical orders.
 
 ## Classroom walkthrough
+
+For the current behavior pass, follow [demo-scenarios.md](demo-scenarios.md) and [behavior-rules.md](behavior-rules.md). Demo dates are time-sensitive: normal startup refreshes expired marked windows, and staff can refresh them at `/demo/readiness/`. Standard booking ends 30 minutes before fulfillment ends; pre-orders use an explicit deadline. Published offers and offers accepting orders are distinct.
 
 1. Open <http://127.0.0.1:8000/food/>. Search for a dish, filter by country and price, and show the open-slot filter. Open a food detail page to inspect that seller's ingredients and price. The 50 seeded offers span the five cuisine groups.
 2. Sign in as `demo_buyer`. Add an offer to the cart, select pickup, calculate the zero-fee quote, and place a cash-on-pickup simulated order. The order detail page shows price and ingredient snapshots. Repeat with a different seller as a separate order to demonstrate the many-to-many marketplace.

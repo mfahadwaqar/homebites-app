@@ -51,7 +51,7 @@ def reject_order(actor, order_id, *, reason):
     order = _lock_owned_order(actor, order_id)
     if order.status == Order.Status.REJECTED:
         return order
-    if order.status not in (Order.Status.CASH_DUE, Order.Status.AWAITING_SELLER, Order.Status.CONFIRMED):
+    if order.status not in (Order.Status.CASH_DUE, Order.Status.AWAITING_SELLER, Order.Status.CONFIRMED, Order.Status.PREPARING):
         raise WorkflowError("This order cannot be rejected in its current state.")
     reason = reason.strip() if isinstance(reason, str) else ""
     if not reason:
@@ -67,13 +67,50 @@ def reject_order(actor, order_id, *, reason):
     return order
 
 
+def handoff_status(order):
+    """The status an order must reach before the seller can complete it."""
+    return Order.Status.READY if order.fulfillment_method == Cart.Method.PICKUP else Order.Status.DELIVERED
+
+
+STEP_NOTES = {
+    Order.Status.PREPARING: "The seller started preparing your order.",
+    Order.Status.OUT_FOR_DELIVERY: "Your order is out for delivery.",
+    Order.Status.DELIVERED: "Your order was delivered.",
+}
+
+
+@transaction.atomic
+def advance_order(actor, order_id):
+    """Move a confirmed order one step along: preparing, ready, out for delivery, delivered."""
+    order = _lock_owned_order(actor, order_id)
+    delivery = order.fulfillment_method == Cart.Method.DELIVERY
+    following = {
+        Order.Status.CONFIRMED: Order.Status.PREPARING,
+        Order.Status.PREPARING: Order.Status.READY,
+        Order.Status.OUT_FOR_DELIVERY: Order.Status.DELIVERED,
+    }
+    if delivery:
+        following[Order.Status.READY] = Order.Status.OUT_FOR_DELIVERY
+    if order.status not in following:
+        raise WorkflowError("This order has no next step right now.")
+    previous_status = order.status
+    order.status = following[order.status]
+    order.save(update_fields=["status", "updated_at"])
+    if order.status == Order.Status.READY:
+        note = "Your order is ready for pickup." if not delivery else "Your order is packed and ready for the courier."
+    else:
+        note = STEP_NOTES[order.status]
+    record_order_event(order, previous_status, actor=actor, note=note)
+    return order
+
+
 @transaction.atomic
 def complete_handoff(actor, order_id):
     order = _lock_owned_order(actor, order_id)
     if order.status == Order.Status.COMPLETED:
         return order
-    if order.status != Order.Status.CONFIRMED:
-        raise WorkflowError("Seller confirmation is required before handoff.")
+    if order.status != handoff_status(order):
+        raise WorkflowError("Finish the earlier steps before completing this order.")
     from payments.services import payment_is_settled, record_cash_collection
 
     if order.payment_method in (Order.PaymentMethod.CASH_PICKUP, Order.PaymentMethod.CASH_DELIVERY):
@@ -84,5 +121,5 @@ def complete_handoff(actor, order_id):
     order.status = Order.Status.COMPLETED
     order.save(update_fields=["status", "updated_at"])
     handoff = "pickup" if order.fulfillment_method == Cart.Method.PICKUP else "delivery"
-    record_order_event(order, previous_status, actor=actor, note=f"Simulated {handoff} handoff recorded.")
+    record_order_event(order, previous_status, actor=actor, note=f"{handoff.capitalize()} handoff recorded.")
     return order

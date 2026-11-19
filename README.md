@@ -16,6 +16,8 @@ The repository includes the following local demonstration flows:
 
 The [milestone roadmap](docs/milestones.md) records what has actually been verified. See the [classroom handover](docs/classroom-handover.md) for the walkthrough, evidence matrix and backup procedure.
 
+For a step-by-step setup, browser checklist, and automated commands, use the [local testing guide](docs/local-testing.md).
+
 ## Requirements
 
 - Windows with Python 3.13 available through `py -3.13`.
@@ -49,11 +51,14 @@ docker compose up -d --wait db
 ## Run locally
 
 ```powershell
-docker compose up -d --wait db
-& .\.venv\Scripts\python.exe manage.py runserver 127.0.0.1:8000
+& .\scripts\start-demo.ps1
 ```
 
 Open <http://127.0.0.1:8000/>. Keep the site on localhost; this prototype is not approved for public hosting.
+
+The startup script explicitly refreshes expired marked demo windows and releases overdue payment holds. It preserves current stock, paused windows and order history. Plain `manage.py runserver` does not prepare the demo. For long-running sessions, staff can refresh at `/demo/readiness/`.
+
+See [behavior rules](docs/behavior-rules.md) for the reasons behind availability, cart, fees and order states, and [demo scenarios](docs/demo-scenarios.md) for the end-to-end walkthroughs.
 
 ## Run checks
 

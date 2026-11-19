@@ -99,6 +99,21 @@ This roadmap is the execution ledger for the complete simulated HomeBites projec
 
 ## Completion evidence
 
+### Behavior acceptance follow-up — 2026-10-16
+
+The earlier milestone completion established technical flows, but did not ensure an aged demo remained orderable on normal startup. The October 16 follow-up corrected that gap and audited the reasons behind visible states/actions.
+
+- Shared read-only availability policy now supplies catalogue, details, storefronts, cart/checkout and payment cutoff checks. Standard orders close 30 minutes before fulfillment ends; pre-orders use explicit deadlines. Published, accepting-orders, sold-out, paused, closed and unscheduled states are distinct.
+- Explicit preparation refreshes only expired marked demo windows, retaining live stock, intentional pauses, passwords and history. Staff refresh is CSRF-protected; browsing never rotates schedules. Concurrent-refresh and historical-confirmed-order tests passed.
+- Cart replacement is reviewable and revision-checked. Changed ingredients/prices require signed confirmation from the current dish page. Cart errors retain items and describe recovery.
+- Totals, quote expiry, payment holds, next actors, simulated handoffs, review moderation and settled-only seller totals are explained. Generic imagery is labelled; vegan offers do not inherit the egg-based Pad Thai fallback.
+- The isolated PostgreSQL full suite passed **170/170 tests**. System and migration checks passed. Catalogue query-budget, malformed reference, token/revision race, stock concurrency and refresh concurrency checks are included.
+- Chrome/Playwright exercised public pages at 1440, 390 and 320 pixels; seller application/approval, draft-to-published offer, slots/capacity, standard pickup/cash completion, preorder delivery with failed payment then a fresh successful checkout, seller handoff, buyer review and staff moderation, cart conflict cancellation, staff refresh and forbidden buyer access. The final complete journey run recorded zero unexpected console/page errors. A default favicon 404 found in QA was corrected and regression-tested.
+- Focused browser checks passed success-message styling and 200% text on dish/cart/account surfaces. An enlarged-text cart overflow was corrected and rechecked. Screenshots remain outside the repository in the Codex workspace.
+- Applied the verified non-destructive refresh to the existing demo: 50 published offers → 50 accepting orders; order count remained **1 → 1**; total windows **10 → 20** and stock rows **100 → 200**, retaining the original historical records.
+- Current rules and walkthroughs are in [behavior-rules.md](behavior-rules.md) and [demo-scenarios.md](demo-scenarios.md). Normal startup is `scripts/start-demo.ps1`.
+- Verification used one agent with an author review, per the user's cost preference. Other browser engines were not tested; existing illustrative images remain representative cuisine imagery rather than 50 exact dish photos. The work remains local and uncommitted.
+
 ### M0 — Complete on 2026-10-04
 
 - Git repository initialized with `main` retaining the planning baseline and implementation isolated on `milestone/01-foundation`.

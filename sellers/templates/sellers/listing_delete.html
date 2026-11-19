@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}Delete {{ listing.dish.name }} | HomeBites{% endblock %}
+{% block extra_styles %}<link rel="stylesheet" href="{% static 'sellers/seller.css' %}">{% endblock %}
+{% block content %}
+<section class="seller-form-page">
+  <h1>Delete {{ listing.dish.name }}?</h1>
+  {% if has_history %}
+    <p>This offer has past orders or reports, so it cannot be deleted without breaking those records. It will be unpublished instead and customers will no longer see it. You can publish it again later.</p>
+  {% else %}
+    <p>This permanently deletes the offer, its order windows and portions. This cannot be undone.</p>
+  {% endif %}
+  <form method="post">
+    {% csrf_token %}
+    <button type="submit">{% if has_history %}Unpublish offer{% else %}Delete offer{% endif %}</button>
+  </form>
+  <p><a href="{% url 'sellers:listing_edit' listing.pk %}">Keep this offer</a></p>
+</section>
+{% endblock %}

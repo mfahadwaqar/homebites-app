@@ -13,6 +13,7 @@ from demo.models import DemoBuyer, DemoSlot
 from fulfillment.models import DemoLocation
 from orders.models import FulfillmentSlot, ListingStock
 from sellers.models import SellerProfile
+from demo.services import demo_slot_times, refresh_demo_availability
 
 
 PICKUP_LOCATIONS = {
@@ -43,26 +44,13 @@ def _ensure_demo_buyer():
 
 
 def _slot_times(order_type, now):
-    days_ahead = 1 if order_type == FulfillmentSlot.OrderType.STANDARD else 3
-    hour = 12 if order_type == FulfillmentSlot.OrderType.STANDARD else 18
-    day = timezone.localdate(now) + timedelta(days=days_ahead)
-    starts_at = timezone.make_aware(datetime.combine(day, time(hour=hour)))
-    ends_at = starts_at + timedelta(hours=2)
-    deadline = starts_at - timedelta(days=1) if order_type == FulfillmentSlot.OrderType.PREORDER else None
-    return starts_at, ends_at, deadline
+    return demo_slot_times(order_type, now)
 
 
 def _current_demo_slot(seller, order_type, now):
     marker = DemoSlot.objects.select_related("slot").filter(seller=seller, order_type=order_type).first()
     if marker:
-        slot = marker.slot
-        if slot.is_active and slot.ends_at > now and (
-            order_type == FulfillmentSlot.OrderType.STANDARD or slot.preorder_deadline > now
-        ):
-            return slot
-        if slot.is_active:
-            slot.is_active = False
-            slot.save(update_fields=["is_active"])
+        return marker.slot
 
     starts_at, ends_at, deadline = _slot_times(order_type, now)
     slot = FulfillmentSlot.objects.create(
@@ -112,6 +100,10 @@ class Command(BaseCommand):
                     )
                     stocks += created
 
+        summary = refresh_demo_availability(at=now)
+        if summary.problems:
+            raise CommandError(" ".join(summary.problems))
+        self.stdout.write(str(summary))
         self.stdout.write(self.style.SUCCESS(
             f"Demo ready: 50 offers, {slots} current slots, {stocks} new stock records. "
             "The demo buyer needs an interactive password; delivery and payment remain simulated."

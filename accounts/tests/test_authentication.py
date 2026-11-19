@@ -13,7 +13,7 @@ class AuthenticationTests(TestCase):
             password="safe-test-password-2026",
         )
 
-    def test_valid_login_redirects_to_profile(self):
+    def test_valid_login_redirects_to_explore_food(self):
         response = self.client.post(
             reverse("login"),
             {"username": "maya", "password": "safe-test-password-2026"},
@@ -21,7 +21,7 @@ class AuthenticationTests(TestCase):
 
         self.assertRedirects(
             response,
-            reverse("accounts:profile"),
+            reverse("catalog:list"),
             fetch_redirect_response=False,
         )
         self.assertEqual(int(self.client.session["_auth_user_id"]), self.user.pk)
@@ -40,7 +40,7 @@ class AuthenticationTests(TestCase):
 
         self.assertRedirects(
             response,
-            reverse("accounts:profile"),
+            reverse("catalog:list"),
             fetch_redirect_response=False,
         )
         self.assertEqual(int(self.client.session["_auth_user_id"]), self.user.pk)

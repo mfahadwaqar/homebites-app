@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% load static %}
 {% block title %}Seller dashboard · HomeBites{% endblock %}
-{% block extra_styles %}<link rel="stylesheet" href="{% static 'sellers/seller.css' %}">{% endblock %}
+{% block extra_styles %}<link rel="stylesheet" href="{% static 'sellers/seller.css' %}?v=20261022">{% endblock %}
 {% block content %}
 <div class="seller-page">
   <section class="seller-hero" aria-labelledby="seller-heading">
@@ -19,21 +19,33 @@
     <a href="{% url 'orders_workflow:queue' %}">Manage orders</a>
     <a href="{% url 'reviews:seller_reviews' seller.pk %}">See reviews</a>
   </nav>
+  <section class="seller-section seller-setup" aria-labelledby="setup-heading">
+    <div class="seller-section-heading"><div><p class="seller-eyebrow">Ready for your next order</p><h2 id="setup-heading">Kitchen setup</h2></div>{% if seller.can_sell %}<a href="{% url 'sellers:storefront' seller.pk %}">View public storefront <span aria-hidden="true">↗</span></a>{% endif %}</div>
+    <ul class="seller-checklist">
+      <li>{% if seller.can_sell %}✓ Approved to sell{% else %}Awaiting staff approval or reactivation. You cannot publish or accept orders until approved.{% endif %}</li>
+      <li>{% if seller.pickup_location %}✓ Pickup location selected{% else %}<a href="{% url 'sellers:profile_edit' %}">Choose a pickup location</a> for handoff and delivery estimates.{% endif %}</li>
+      <li>{% if has_public_food %}✓ Published food with reviewed ingredients{% else %}<a href="{% url 'sellers:listing_create' %}">Create an offer and review its ingredients</a>, then publish it.{% endif %}</li>
+      {% if seller.can_sell %}
+      <li>{% if has_open_window %}✓ Booking window open{% else %}<a href="{% url 'sellers:slots' %}">Create or reopen a fulfillment window</a>. Standard booking closes 30 minutes before the window ends.{% endif %}</li>
+      <li>{% if has_portions %}✓ Portions available{% else %}<a href="{% url 'sellers:slots' %}">Set portions for each dish and window</a>. Publishing a dish alone does not make it orderable.{% endif %}</li>
+      {% endif %}
+    </ul>
+  </section>
   <section class="seller-section" aria-labelledby="seller-sales-heading">
-    <div class="seller-section-heading"><div><p class="seller-eyebrow">Demo figures</p><h2 id="seller-sales-heading">Completed sales</h2></div><p>Delivery charges are separate.</p></div>
+    <div class="seller-section-heading"><div><p class="seller-eyebrow">Sales</p><h2 id="seller-sales-heading">Completed sales</h2></div><p>Delivery charges are separate.</p></div>
     <div class="seller-stat-grid">
       <div class="seller-stat"><span>Completed orders</span><strong>{{ completed_orders }}</strong></div>
       <div class="seller-stat"><span>Portions sold</span><strong>{{ portions_sold }}</strong></div>
       <div class="seller-stat"><span>Food subtotal</span><strong>฿{{ food_subtotal }}</strong></div>
       <div class="seller-stat"><span>Seller food earnings</span><strong>฿{{ seller_earnings }}</strong></div>
     </div>
-    <p class="seller-fine-print">Platform commission: ฿{{ commission_total }} (10% of completed food sales).{% if rating_average %} Approved-review average: {{ rating_average|floatformat:1 }}/5.{% endif %}</p>
+    <p class="seller-fine-print">Only completed orders with successful payment or recorded cash collection count. Platform commission: ฿{{ commission_total }} (10% of completed food sales).{% if rating_average %} Approved-review average: {{ rating_average|floatformat:1 }}/5.{% else %} No published reviews yet.{% endif %}</p>
   </section>
   <section class="seller-section" aria-labelledby="seller-offers-heading">
     <div class="seller-section-heading"><div><p class="seller-eyebrow">Catalogue</p><h2 id="seller-offers-heading">Your offers</h2></div><a href="{% url 'sellers:listing_create' %}">Add an offer</a></div>
     <ul class="seller-offer-list">
-      {% for listing in listings %}<li><div><strong>{{ listing.dish.name }}</strong><span>{{ listing.get_status_display }} · ฿{{ listing.price }}</span></div><a href="{% url 'sellers:listing_edit' listing.pk %}">Edit offer <span aria-hidden="true">→</span></a></li>
-      {% empty %}<li class="seller-empty">No offers yet. Choose one of the approved dishes to begin.</li>{% endfor %}
+      {% for listing in listings %}<li><div class="seller-offer-summary"><div class="seller-offer-image" aria-hidden="true">{% if listing.image %}<img src="{{ listing.image.url }}" alt="" width="96" height="96" loading="lazy">{% else %}<img src="{% static listing.illustrative_image %}" alt="" width="96" height="96" loading="lazy">{% endif %}</div><div><strong>{{ listing.dish.name }}</strong><span>{{ listing.get_status_display }} · ฿{{ listing.price }}</span>{% include 'catalog/_availability.html' %}</div></div><a href="{% url 'sellers:listing_edit' listing.pk %}" aria-label="Edit {{ listing.dish.name }} offer">Edit offer <span aria-hidden="true">→</span></a> <a class="seller-delete-link" href="{% url 'sellers:listing_delete' listing.pk %}" aria-label="Delete {{ listing.dish.name }} offer">Delete</a></li>
+      {% empty %}<li class="seller-empty"><div><strong>Your menu starts here</strong><p>No offers yet. Choose one of the approved dishes to begin.</p></div><a href="{% url 'sellers:listing_create' %}">Create an offer <span aria-hidden="true">→</span></a></li>{% endfor %}
     </ul>
   </section>
 </div>

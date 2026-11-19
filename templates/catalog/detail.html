@@ -1,42 +1,82 @@
 {% extends "base.html" %}
 {% load static %}
 {% block title %}{{ listing.dish.name }} | HomeBites{% endblock %}
+{% block extra_styles %}<link rel="stylesheet" href="{% static 'catalog/discovery.css' %}?v=20261022-2">{% endblock %}
 {% block content %}
-<link rel="stylesheet" href="{% static 'catalog/discovery.css' %}">
 <article class="catalog-page catalog-detail">
-  <a class="catalog-back" href="{% url 'catalog:list' %}">← All food</a>
+  <a class="catalog-back" href="{% url 'catalog:list' %}">← Explore food</a>
   <div class="catalog-detail__layout">
-    <div>
+    <div class="catalog-detail__visual">
       <div class="catalog-detail__art" aria-hidden="true">
-        {% if listing.image %}<img src="{{ listing.image.url }}" alt="">{% else %}{{ listing.dish.country.code }}{% endif %}
+        {% if listing.image %}<img src="{{ listing.image.url }}" alt="" fetchpriority="high" decoding="async" width="1000" height="800">{% else %}<img src="{% static listing.illustrative_image %}" alt="" fetchpriority="high" decoding="async" width="1000" height="800">{% endif %}
       </div>
+      <div class="catalog-detail__guide"><p class="catalog-eyebrow">From a home kitchen</p><h2>A little planning.<br>A taste of home.</h2><p>Each dish is prepared for a published order window. Check the ingredients and choose the time that works for you.</p><a href="{% url 'sellers:storefront' listing.seller.pk %}">Explore this kitchen's menu <span aria-hidden="true">↗</span></a></div>
+    </div>
+    <aside class="catalog-detail__panel">
       <p class="catalog-eyebrow">{{ listing.dish.country.name }} cuisine</p>
       <h1>{{ listing.dish.name }}</h1>
       <p class="catalog-detail__description">{{ listing.description|default:listing.dish.description }}</p>
       <p class="catalog-detail__seller">Made by <a href="{% url 'sellers:storefront' listing.seller.pk %}">{{ listing.seller.storefront_name }}</a></p>
-      <p><a href="{% url 'reviews:seller_reviews' listing.seller.pk %}">Seller reviews</a> · <a href="{% url 'reviews:report_listing' listing.pk %}">Report this offer</a></p>
-    </div>
-    <aside class="catalog-detail__panel">
-      <p class="catalog-detail__price">฿{{ listing.price }}</p>
-      <h2>Ingredients for this offer</h2>
-      <p>Provided and reviewed by this seller. Check these before ordering.</p>
-      {% if listing.dietary_tags %}<p>Seller-declared dietary labels: {{ listing.dietary_tags|join:", " }}. Not an allergy or certification guarantee.</p>{% endif %}
-      <ul>
+      <p class="catalog-detail__seller-links"><a href="{% url 'reviews:seller_reviews' listing.seller.pk %}">Seller reviews</a> · <a href="{% url 'reviews:report_listing' listing.pk %}">Report this offer</a></p>
+      <p class="catalog-detail__price">฿{{ listing.price }} <span>per portion</span></p>
+      {% include 'catalog/_availability.html' %}
+      <section class="catalog-detail__section" aria-labelledby="ingredients-heading">
+      <h2 id="ingredients-heading">Ingredients for this offer</h2>
+      <p>Provided and reviewed by this seller. Check these before ordering. Ask the seller about allergens if needed.</p>
+      {% if listing.dietary_tags %}<p>Seller-declared dietary labels: {{ listing.dietary_tags|join:", " }}. Not an allergy or certification guarantee.{% if 'halal' in listing.dietary_tags %} Halal is the seller's own declaration, not an official halal certificate.{% endif %}</p>{% endif %}
+      <ul class="ingredient-list">
         {% for ingredient in listing.ingredients %}<li>{{ ingredient }}</li>{% endfor %}
       </ul>
+      <div class="nutrition-note">
+        <div><strong>Calories per serving</strong><span>{% if listing.has_nutrition %}Estimated {{ listing.calories_kcal }} kcal{% else %}Not provided{% endif %}</span></div>
+        {% if listing.has_nutrition %}
+          <p>Serving size: {{ listing.serving_size }}. Estimates vary with ingredients and preparation.</p>
+          <p>Estimate source: {{ listing.nutrition_source }}</p>
+        {% else %}<p>A reviewed serving size and estimated kcal value have not been provided for this offer.</p>{% endif %}
+      </div>
+      </section>
+      {% if review_item %}
+        <form method="post" action="{% url 'orders:acknowledge' review_item.pk %}">{% csrf_token %}
+          <input type="hidden" name="review_token" value="{{ review_token }}">
+          <p>Review the ingredient list and price above. This confirms the current recipe and price for the item already in your cart.</p>
+          <button type="submit">Confirm current ingredients and price</button>
+        </form>
+      {% endif %}
+      <section class="catalog-detail__section catalog-detail__ordering" aria-labelledby="ordering-heading">
       {% if slots %}
-        <h2>Choose a collection window</h2>
+        <h2 id="ordering-heading">Choose a fulfillment window</h2>
+        <p>Standard orders allow preparation for the selected window; they are not instant meals. Ordering closes 30 minutes before the window ends. Pre-orders must be placed before their stated deadline.</p>
+        <ul class="window-list">
+          {% for slot in slots %}<li><strong>{{ slot.get_order_type_display }}</strong>: {{ slot.starts_at|date:"j M Y, g:i A" }} – {{ slot.ends_at|date:"j M Y, g:i A" }} Bangkok time.<br>Order by {{ slot.booking_cutoff|date:"j M Y, g:i A" }} · {{ slot.available }} portions left.<br>{% if slot.allows_pickup %}Pickup{% endif %}{% if slot.allows_pickup and slot.allows_delivery %} or {% endif %}{% if slot.allows_delivery %}delivery{% endif %}.</li>{% endfor %}
+        </ul>
         <form method="post" action="{% url 'orders:add' listing.pk %}">
           {% csrf_token %}
           <label for="slot">Standard order or pre-order</label>
           <select id="slot" name="slot" required>
-            {% for slot in slots %}<option value="{{ slot.pk }}">{{ slot.get_order_type_display }} · {{ slot.starts_at|date:"M j, g:i A" }} ({{ slot.available }} left)</option>{% endfor %}
+            {% for slot in slots %}<option value="{{ slot.pk }}">{{ slot.get_order_type_display }} · {{ slot.starts_at|date:"M j, g:i A" }} ({{ slot.available }} portions left)</option>{% endfor %}
           </select>
           <label for="quantity">Portions</label>
           <input id="quantity" name="quantity" type="number" min="1" value="1" required>
           <button type="submit">Add to cart</button>
         </form>
-      {% else %}<p>No open order window yet. Check back later.</p>{% endif %}
+        <p>One kitchen and one fulfillment window per cart. Portions are reserved at checkout, not when added to your cart.</p>
+      {% else %}<h2 id="ordering-heading">Not taking orders right now</h2><p>This offer has no bookable window with portions available. You can return later or <a href="{% url 'catalog:list' %}?available=1">Explore other food</a> accepting orders.</p>{% endif %}
+      </section>
+      <section class="catalog-detail__section dish-reviews" aria-labelledby="reviews-heading">
+        <h2 id="reviews-heading">Customer reviews</h2>
+        {% if review_summary.count %}
+          <p class="dish-reviews__summary"><strong>{{ review_summary.average|floatformat:1 }} out of 5</strong> from {{ review_summary.count }} review{{ review_summary.count|pluralize }}</p>
+          {% for review in reviews %}
+            <article class="dish-review">
+              <p class="dish-review__head"><strong>{{ review.order.buyer.first_name|default:"Customer" }}{% if review.order.buyer.last_name %} {{ review.order.buyer.last_name|slice:":1" }}.{% endif %}</strong> <span>{{ review.rating }} out of 5</span></p>
+              {% if review.comment %}<p>{{ review.comment }}</p>{% endif %}
+              <small>Completed order · {{ review.created_at|date:"j M Y" }}</small>
+            </article>
+          {% endfor %}
+        {% else %}
+          <p>No reviews for this dish yet. Reviews appear after a completed order.</p>
+        {% endif %}
+      </section>
     </aside>
   </div>
 </article>

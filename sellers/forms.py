@@ -43,7 +43,8 @@ class FoodListingForm(forms.ModelForm):
 
     class Meta:
         model = FoodListing
-        fields = ["dish", "description", "image", "price", "status"]
+        fields = ["dish", "description", "image", "price", "calories_kcal", "serving_size",
+                  "nutrition_source", "nutrition_reviewed", "status"]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

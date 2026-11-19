@@ -4,7 +4,7 @@
 <section class="order-page"><h1>Your orders</h1>
   {% for order in orders %}
     <article class="order-card"><h2><a href="{% url 'orders:detail' order.pk %}">Order #{{ order.pk }}</a></h2>
-      <p>{{ order.seller.storefront_name }} · {{ order.get_status_display }} · ฿{{ order.customer_total }}</p>
+      <p>{{ order.seller.storefront_name }} · {{ order.display_status }} · ฿{{ order.customer_total }}</p>
     </article>
   {% empty %}<p>No orders yet.</p><a href="{% url 'catalog:list' %}">Explore food</a>{% endfor %}
 </section>

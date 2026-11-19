@@ -1,66 +1,98 @@
 {% extends "base.html" %}
 {% block title %}Your cart | HomeBites{% endblock %}
 {% block content %}
-<section class="order-page">
-  <p class="eyebrow">Simulated marketplace</p>
+<section class="checkout-page">
+  <p class="checkout-steps" aria-label="Checkout progress"><span class="is-current">1 Cart</span><span>2 Payment</span><span>3 Confirmation</span></p>
   <h1>Your cart</h1>
   {% if items %}
-    <p>One seller and one collection window per order. Review ingredients before continuing.</p>
-    <p><strong>Seller:</strong> {{ cart.seller.storefront_name }} · <strong>Window:</strong> {{ cart.slot.get_order_type_display }} {{ cart.slot.starts_at|date:"M j, g:i A" }}</p>
-    <div class="order-stack">
-      {% for item in items %}
-        <article class="order-card">
-          <h2><a href="{% url 'catalog:detail' item.listing.pk %}">{{ item.listing.dish.name }}</a></h2>
-          <p>฿{{ item.listing.price }} per portion · {{ item.listing.dish.country.name }}</p>
-          <p><strong>Ingredients:</strong> {{ item.listing.ingredients|join:", " }}</p>
-          {% if item.acknowledged_ingredient_version != item.listing.ingredient_version or item.acknowledged_unit_price != item.listing.price %}<p class="form-alert">This offer changed. Update the quantity to reconfirm before checkout.</p>{% endif %}
-          <form method="post" action="{% url 'orders:update' item.pk %}">
-            {% csrf_token %}<label>Portions <input type="number" name="quantity" min="0" value="{{ item.quantity }}"></label>
-            <button type="submit">Update</button><span> Use 0 to remove.</span>
+    <p class="checkout-lead">You can add dishes from several kitchens. Each kitchen and time window becomes its own order, so you can pay and track them separately. Portions are reserved at checkout, not in your cart.</p>
+    {% if cart_problems %}<div class="form-alert"><h2>Review your cart</h2><ul>{% for problem in cart_problems %}<li>{{ problem }}</li>{% endfor %}</ul><a href="{% url 'catalog:list' %}?available=1">Find another dish or fulfillment window</a></div>{% endif %}
+    <div class="checkout-layout">
+      <div class="checkout-main">
+        {% for group in groups %}
+        <div class="pay-card">
+          <h2>{{ group.seller.storefront_name }}</h2>
+          <p class="pay-card__meta">{{ group.slot.get_order_type_display }} · {{ group.slot.starts_at|date:"j M Y, g:i A" }} – {{ group.slot.ends_at|date:"j M Y, g:i A" }} Bangkok time. Order by {{ group.cutoff|date:"j M Y, g:i A" }} Bangkok time.</p>
+          {% for item in group.items %}
+            <article class="cart-line">
+              <div class="cart-line__info">
+                <h3><a href="{% url 'catalog:detail' item.listing.pk %}">{{ item.listing.dish.name }}</a></h3>
+                <p class="pay-card__meta">฿{{ item.listing.price }} per portion · {{ item.listing.dish.country.name }}</p>
+                <p class="cart-line__ing"><strong>Ingredients:</strong> {{ item.listing.ingredients|join:", " }}</p>
+                {% if item.acknowledged_ingredient_version != item.listing.ingredient_version or item.acknowledged_unit_price != item.listing.price %}<p class="form-alert">This offer changed. <a href="{% url 'catalog:detail' item.listing.pk %}?review_cart_item={{ item.pk }}">Review current ingredients and price</a> before checkout.</p>{% endif %}
+              </div>
+              <form class="cart-line__qty" method="post" action="{% url 'orders:update' item.pk %}">
+                {% csrf_token %}<label>Portions <input type="number" name="quantity" min="0" value="{{ item.quantity }}"></label>
+                <button type="submit">Update</button><small>Use 0 to remove.</small>
+              </form>
+            </article>
+          {% endfor %}
+          {% if group.quote %}
+            <p class="pay-card__meta">{% if group.quote.method == 'delivery' %}Delivery from {{ group.quote.origin.label }} to {{ group.quote.destination.label }}: ฿{{ group.quote.fee }} ({{ group.quote.distance_km }} km).{% else %}Pickup at {{ group.quote.origin.label|default:'the seller pickup point' }} is free.{% endif %} Kitchen total ฿{{ group.totals.customer_total }}.</p>
+          {% endif %}
+        </div>
+        {% endfor %}
+
+        <div class="pay-card">
+          <h2>Pickup or delivery</h2>
+          <form class="stack-form" method="post" action="{% url 'orders:quote' %}">
+            {% csrf_token %}
+            <label for="method">Method</label>
+            <select name="method" id="method">
+              {% if all_pickup %}<option value="pickup"{% if cart.method == 'pickup' %} selected{% endif %}>Pickup, free</option>{% endif %}
+              {% if all_delivery %}<option value="delivery"{% if cart.method == 'delivery' %} selected{% endif %}>Bangkok delivery</option>{% endif %}
+            </select>
+            <label for="destination">Delivery area</label>
+            <select name="destination" id="destination"><option value="">Choose your area</option>
+              {% for location in locations %}<option value="{{ location.pk }}"{% if cart.destination_id == location.pk %} selected{% endif %}>{{ location.label }}</option>{% endfor %}
+            </select>
+            <p class="pay-card__meta" id="delivery-hint" hidden>Choose your delivery area to see the delivery price.</p>
+            <button type="submit" class="js-hide-when-auto">Update delivery price</button>
           </form>
-        </article>
-      {% endfor %}
-    </div>
-    <div class="order-card">
-      <h2>Pickup or simulated delivery</h2>
-      <form method="post" action="{% url 'orders:quote' %}">
-        {% csrf_token %}
-        <label for="method">Method</label>
-        <select name="method" id="method">
-          <option value="pickup"{% if cart.method == 'pickup' %} selected{% endif %}>Pickup — free</option>
-          <option value="delivery"{% if cart.method == 'delivery' %} selected{% endif %}>Simulated Bangkok delivery</option>
-        </select>
-        <label for="destination">Delivery area (needed only for delivery)</label>
-        <select name="destination" id="destination"><option value="">Choose a demo Bangkok area</option>
-          {% for location in locations %}<option value="{{ location.pk }}"{% if cart.destination_id == location.pk %} selected{% endif %}>{{ location.label }}</option>{% endfor %}
-        </select>
-        <button type="submit">Calculate estimate</button>
-      </form>
-      {% if quote %}
-        <dl class="order-totals">
-          <div><dt>Food subtotal</dt><dd>฿{{ quote.food_subtotal }}</dd></div>
-          <div><dt>Delivery estimate</dt><dd>฿{{ quote.fee }}</dd></div>
-          <div><dt>Distance</dt><dd>{{ quote.distance_km }} km (simulated)</dd></div>
-        </dl>
-      {% elif cart.method == 'delivery' %}<p>Get a fresh delivery quote before checkout.</p>{% endif %}
-    </div>
-    <div class="order-card">
-      <h2>Place a demo order</h2>
-      <p>No real payment or delivery will occur. The platform commission is 10% of food subtotal; delivery charge is separate.</p>
-      <form method="post" action="{% url 'orders:checkout' %}">
-        {% csrf_token %}<input type="hidden" name="idempotency_key" value="{{ checkout_key }}">
-        <label for="payment_method">Payment simulation</label>
-        <select name="payment_method" id="payment_method" required>
-          {% if cart.method == 'pickup' %}<option value="cash_pickup">Cash on pickup</option>{% else %}<option value="cash_delivery">Cash on delivery</option>{% endif %}
-          <option value="mock_promptpay">Mock PromptPay</option>
-          <option value="mock_card">Mock card</option>
-        </select>
-        <button type="submit"{% if cart.method == 'delivery' and not quote %} disabled{% endif %}>Place simulated order</button>
-      </form>
+          {% if cart.method == 'delivery' %}
+            {% if all_quoted %}
+              <p class="pay-card__meta">Delivery prices are valid for 10 minutes. Changes to your cart or delivery area need a new price. Each kitchen charges its own delivery: distance = straight-line distance × {{ tariff.route_multiplier }}; fee = ฿{{ tariff.base_fee }} + ฿{{ tariff.per_km_fee }} × distance in km.</p>
+            {% else %}<p class="pay-card__meta">Choose a delivery area to see the delivery price for each kitchen.</p>{% endif %}
+          {% endif %}
+        </div>
+      </div>
+
+      <aside class="checkout-side">
+        <form class="pay-card summary" method="post" action="{% url 'orders:checkout' %}">
+          {% csrf_token %}<input type="hidden" name="idempotency_key" value="{{ checkout_key }}">
+          <h2>Order summary</h2>
+          {% for group in groups %}
+            {% if multi %}<p class="pay-card__meta"><strong>{{ group.seller.storefront_name }}</strong></p>{% endif %}
+            <ul class="summary__items">{% for item in group.items %}<li><span>{{ item.listing.dish.name }} × {{ item.quantity }}</span><span>฿{{ item.line_total }}</span></li>{% endfor %}</ul>
+          {% endfor %}
+          <dl class="order-totals">
+            <div><dt>Food subtotal</dt><dd>฿{{ food_total }}</dd></div>
+            {% if cart.method == 'delivery' %}
+              {% if all_quoted %}
+                <div><dt>Delivery{% if multi %} (all kitchens){% endif %}</dt><dd>฿{{ delivery_total }}</dd></div>
+                <div class="order-totals__total"><dt>Customer total</dt><dd>฿{{ grand_total }}</dd></div>
+              {% else %}
+                <div><dt>Delivery</dt><dd>Choose a delivery area</dd></div>
+              {% endif %}
+            {% else %}
+              <div><dt>Pickup</dt><dd>Free</dd></div>
+              <div class="order-totals__total"><dt>Customer total</dt><dd>฿{{ grand_total }}</dd></div>
+            {% endif %}
+          </dl>
+          {% if multi %}<p class="pay-card__meta">This cart becomes {{ groups|length }} orders, one per kitchen and window. With PromptPay or card you pay each order in turn.</p>{% endif %}
+          <fieldset class="pay-options">
+            <legend>Payment method</legend>
+            <label class="pay-option"><input type="radio" name="payment_method" value="{% if cart.method == 'pickup' %}cash_pickup{% else %}cash_delivery{% endif %}" checked><span><b>{% if cart.method == 'pickup' %}Cash on pickup{% else %}Cash on delivery{% endif %}</b><small>Pay the seller when you receive your food.</small></span></label>
+            <label class="pay-option"><input type="radio" name="payment_method" value="mock_promptpay"><span><b>PromptPay</b><small>Pay by scanning a QR code.</small></span></label>
+            <label class="pay-option"><input type="radio" name="payment_method" value="mock_card"><span><b>Card</b><small>Pay with a debit or credit card.</small></span></label>
+          </fieldset>
+          <button class="summary__submit" type="submit"{% if cart_problems %} disabled{% elif cart.method == 'delivery' and not all_quoted %} disabled{% endif %}>Place {% if multi %}{{ groups|length }} orders{% else %}order{% endif %}</button>
+          <p class="pay-card__meta">The 10% platform commission is deducted from seller food earnings, not added to your bill. You pay the food subtotal plus the delivery fee. Online payment reserves portions for up to 15 minutes, ending earlier if the booking cutoff arrives. Each seller must then confirm the order.</p>
+        </form>
+      </aside>
     </div>
   {% else %}
-    <p>Your cart is empty. Browse the five cuisine groups to begin.</p>
-    <a href="{% url 'catalog:list' %}">Explore food</a>
+    <div class="pay-card"><p>Your cart is empty. Browse the five cuisines to begin.</p><a class="primary-link" href="{% url 'catalog:list' %}">Explore food</a></div>
   {% endif %}
 </section>
 {% endblock %}

@@ -11,5 +11,6 @@ urlpatterns = [
     path("<int:order_id>/", workflow_views.detail, name="detail"),
     path("<int:order_id>/accept/", workflow_views.accept, name="accept"),
     path("<int:order_id>/reject/", workflow_views.reject, name="reject"),
+    path("<int:order_id>/advance/", workflow_views.advance, name="advance"),
     path("<int:order_id>/handoff/", workflow_views.handoff, name="handoff"),
 ]

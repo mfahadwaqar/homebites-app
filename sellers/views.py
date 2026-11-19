@@ -1,15 +1,18 @@
 from decimal import Decimal
 
 from django.contrib.auth.decorators import login_required
-from django.db.models import Avg, Sum
+from django.db.models import Avg, Sum, F
+from django.utils import timezone
 from django.http import Http404
+from django.contrib import messages
 from django.shortcuts import get_object_or_404, redirect, render
 
 from catalog.models import FoodListing
-from orders.models import Order, OrderItem
+from orders.models import Order, OrderItem, FulfillmentSlot
 from reviews.models import Review
 from sellers.forms import FoodListingForm, SellerApplicationForm
 from sellers.models import SellerProfile
+from orders.availability import attach_availability, window_problem
 
 
 @login_required
@@ -30,8 +33,10 @@ def dashboard(request):
     seller = SellerProfile.objects.filter(user=request.user).first()
     if seller is None:
         return redirect("sellers:apply")
-    listings = FoodListing.objects.filter(seller=seller).select_related("dish", "dish__country")
-    completed = Order.objects.filter(seller=seller, status=Order.Status.COMPLETED)
+    listings = attach_availability(FoodListing.objects.filter(seller=seller).select_related("dish", "dish__country", "seller__user"))
+    completed = Order.objects.filter(seller=seller, status=Order.Status.COMPLETED,
+        payment_attempts__state__in=["succeeded", "cash_collected"],
+        payment_attempts__amount=F("customer_total")).distinct()
     totals = completed.aggregate(
         food_subtotal=Sum("food_subtotal"),
         commission_total=Sum("commission"),
@@ -48,6 +53,9 @@ def dashboard(request):
         "commission_total": totals["commission_total"] or Decimal("0.00"),
         "seller_earnings": totals["seller_earnings"] or Decimal("0.00"),
         "rating_average": reviews["average"],
+        "has_public_food": any(listing.status == "published" and listing.ingredients_reviewed for listing in listings),
+        "has_open_window": any(not window_problem(slot, at=timezone.now()) for slot in FulfillmentSlot.objects.filter(seller=seller)),
+        "has_portions": any(listing.availability.orderable for listing in listings),
     })
 
 
@@ -65,8 +73,21 @@ def profile_edit(request):
 
 def storefront(request, pk):
     seller = get_object_or_404(SellerProfile, pk=pk, status=SellerProfile.Status.APPROVED, user__is_active=True)
-    listings = FoodListing.objects.public().filter(seller=seller).select_related("dish", "dish__country")
-    return render(request, "sellers/storefront.html", {"seller": seller, "listings": listings})
+    listings = attach_availability(FoodListing.objects.public().filter(seller=seller).select_related("dish", "dish__country", "seller__user"))
+    from django.db.models import Avg, Count
+    from catalog.public_views import attach_ratings
+    from orders.models import Order
+    from reviews.models import Review
+    listings = list(listings)
+    attach_ratings(listings)
+    review_qs = Review.objects.public().filter(order__seller=seller)
+    summary = review_qs.aggregate(count=Count("pk"), average=Avg("rating"))
+    recent_reviews = list(review_qs.select_related("order__buyer").prefetch_related("order__items").order_by("-created_at", "-pk")[:3])
+    completed_orders = Order.objects.filter(seller=seller, status=Order.Status.COMPLETED).count()
+    return render(request, "sellers/storefront.html", {
+        "seller": seller, "listings": listings, "summary": summary,
+        "recent_reviews": recent_reviews, "completed_orders": completed_orders,
+    })
 
 
 def _seller_for_edit(request):
@@ -112,3 +133,30 @@ def listing_edit(request, pk):
             form.save()
             return redirect("sellers:dashboard")
     return render(request, "sellers/listing_form.html", {"form": form, "seller": seller, "heading": "Edit offer"})
+
+
+@login_required
+def listing_delete(request, pk):
+    """Delete an offer. Offers with order history are unpublished instead, so past orders stay intact."""
+    from orders.models import CartItem, ListingStock
+    from reviews.models import Report
+
+    seller = _seller_for_edit(request)
+    if seller is None:
+        raise Http404
+    listing = get_object_or_404(FoodListing, pk=pk, seller=seller)
+    has_history = OrderItem.objects.filter(listing=listing).exists() or Report.objects.filter(listing=listing).exists()
+    if request.method == "POST":
+        name = listing.dish.name
+        if has_history:
+            if listing.status != FoodListing.Status.DRAFT:
+                listing.status = FoodListing.Status.DRAFT
+                listing.save(update_fields=["status", "updated_at"])
+            messages.success(request, f"{name} has past orders, so it was unpublished instead of deleted.")
+        else:
+            CartItem.objects.filter(listing=listing).delete()
+            ListingStock.objects.filter(listing=listing).delete()
+            listing.delete()
+            messages.success(request, f"{name} was deleted.")
+        return redirect("sellers:dashboard")
+    return render(request, "sellers/listing_delete.html", {"listing": listing, "has_history": has_history})

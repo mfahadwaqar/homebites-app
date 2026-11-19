@@ -5,7 +5,8 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 
 from orders.models import Order
-from orders.services.workflow import WorkflowError, accept_order, complete_handoff, reject_order
+from orders.presentation import seller_next_step
+from orders.services.workflow import WorkflowError, accept_order, advance_order, complete_handoff, reject_order
 from payments.services import PaymentConflict
 from sellers.models import SellerProfile
 
@@ -25,7 +26,7 @@ def detail(request, order_id):
         Order.objects.filter(seller__user=request.user).select_related("buyer", "slot", "destination").prefetch_related("items"),
         pk=order_id,
     )
-    return render(request, "orders/workflow/detail.html", {"order": order})
+    return render(request, "orders/workflow/detail.html", {"order": order, "next_step": seller_next_step(order)})
 
 
 def _perform(request, order_id, action, **kwargs):
@@ -36,7 +37,7 @@ def _perform(request, order_id, action, **kwargs):
     except (WorkflowError, PaymentConflict) as exc:
         messages.error(request, str(exc))
     else:
-        messages.success(request, "Order updated in this local simulation.")
+        messages.success(request, "Order updated.")
     return redirect("orders_workflow:detail", order_id=order_id)
 
 
@@ -50,6 +51,12 @@ def accept(request, order_id):
 @require_POST
 def reject(request, order_id):
     return _perform(request, order_id, reject_order, reason=request.POST.get("reason", ""))
+
+
+@login_required
+@require_POST
+def advance(request, order_id):
+    return _perform(request, order_id, advance_order)
 
 
 @login_required

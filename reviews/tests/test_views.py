@@ -29,7 +29,7 @@ class ReviewPageTests(ReviewFixture):
         review = submit_review(self.completed, self.buyer, rating=4, comment="Fresh and tasty")
         url = reverse("reviews:seller_reviews", args=[self.seller.pk])
         pending = self.client.get(url)
-        self.assertContains(pending, "No reviews yet")
+        self.assertContains(pending, "No published reviews yet")
         self.assertNotContains(pending, "Fresh and tasty")
 
         moderate_review(review, self.staff, decision="approved", reason="Verified")

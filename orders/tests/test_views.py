@@ -49,7 +49,7 @@ class BuyerJourneyTests(TestCase):
         order = Order.objects.get(buyer=self.buyer)
         self.assertRedirects(result, reverse("orders:detail", args=[order.pk]))
         self.assertEqual(order.status, Order.Status.CASH_DUE)
-        self.assertContains(self.client.get(reverse("orders:detail", args=[order.pk])), "Simulated")
+        self.assertContains(self.client.get(reverse("orders:detail", args=[order.pk])), "Order totals")
 
     def test_another_buyer_cannot_view_order(self):
         from orders.services.cart import add_to_cart
@@ -60,6 +60,131 @@ class BuyerJourneyTests(TestCase):
         stranger = get_user_model().objects.create_user(username="stranger", password="test-password-2026")
         self.client.force_login(stranger)
         self.assertEqual(self.client.get(reverse("orders:detail", args=[order.pk])).status_code, 404)
+
+    def _second_kitchen(self):
+        other = FoodListing.objects.public().exclude(seller=self.listing.seller).first()
+        start = timezone.now() + timedelta(hours=1)
+        other_slot = FulfillmentSlot.objects.create(seller=other.seller, order_type="standard", starts_at=start, ends_at=start + timedelta(hours=2))
+        ListingStock.objects.create(listing=other, slot=other_slot, capacity=3)
+        return other, other_slot
+
+    def test_cart_accepts_a_second_kitchen_and_shows_both(self):
+        from orders.models import Cart
+        self.client.force_login(self.buyer)
+        self.client.post(reverse("orders:add", args=[self.listing.pk]), {"slot": self.slot.pk, "quantity": 1})
+        other, other_slot = self._second_kitchen()
+        response = self.client.post(reverse("orders:add", args=[other.pk]), {"slot": other_slot.pk, "quantity": 2})
+        self.assertEqual(response.status_code, 302)
+        cart = Cart.objects.get(buyer=self.buyer)
+        self.assertEqual(cart.items.count(), 2)
+        page = self.client.get(reverse("orders:cart"))
+        self.assertContains(page, self.listing.seller.storefront_name)
+        self.assertContains(page, other.seller.storefront_name)
+        self.assertContains(page, "Place 2 orders")
+
+    def test_checkout_places_one_order_per_kitchen(self):
+        from orders.models import Order
+        self.client.force_login(self.buyer)
+        self.client.post(reverse("orders:add", args=[self.listing.pk]), {"slot": self.slot.pk, "quantity": 1})
+        other, other_slot = self._second_kitchen()
+        self.client.post(reverse("orders:add", args=[other.pk]), {"slot": other_slot.pk, "quantity": 2})
+        response = self.client.post(reverse("orders:checkout"), {"idempotency_key": "multi-kitchen-1", "payment_method": "cash_pickup"})
+        self.assertRedirects(response, reverse("orders:list"))
+        orders = list(Order.objects.filter(buyer=self.buyer).order_by("pk"))
+        self.assertEqual(len(orders), 2)
+        self.assertEqual({o.seller_id for o in orders}, {self.listing.seller_id, other.seller_id})
+        self.assertTrue(all(o.status == Order.Status.CASH_DUE for o in orders))
+        # a repeated submit does not create more orders
+        self.client.post(reverse("orders:checkout"), {"idempotency_key": "multi-kitchen-1", "payment_method": "cash_pickup"})
+        self.assertEqual(Order.objects.filter(buyer=self.buyer).count(), 2)
+
+    def test_online_payment_for_two_kitchens_pays_each_in_turn(self):
+        from orders.models import Order
+        self.client.force_login(self.buyer)
+        self.client.post(reverse("orders:add", args=[self.listing.pk]), {"slot": self.slot.pk, "quantity": 1})
+        other, other_slot = self._second_kitchen()
+        self.client.post(reverse("orders:add", args=[other.pk]), {"slot": other_slot.pk, "quantity": 1})
+        response = self.client.post(reverse("orders:checkout"), {"idempotency_key": "multi-kitchen-2", "payment_method": "mock_promptpay"})
+        first, second = Order.objects.filter(buyer=self.buyer).order_by("pk")
+        self.assertRedirects(response, reverse("payments:pay", args=[first.pk]))
+        page = self.client.get(reverse("payments:pay", args=[first.pk]))
+        self.assertContains(page, f"Order #{second.pk}")
+
+    def test_stale_cart_explains_cutoff_and_preserves_items(self):
+        from orders.models import Cart
+        from orders.services.cart import add_to_cart
+        add_to_cart(self.buyer, self.listing, self.slot, 1)
+        FulfillmentSlot.objects.filter(pk=self.slot.pk).update(ends_at=timezone.now() + timedelta(minutes=10), starts_at=timezone.now() - timedelta(hours=1))
+        self.client.force_login(self.buyer)
+        response = self.client.get(reverse("orders:cart"))
+        self.assertContains(response, "Ordering closed")
+        self.assertContains(response, "Review your cart")
+        self.assertEqual(Cart.objects.get(buyer=self.buyer).items.count(), 1)
+
+    def test_price_change_needs_signed_detail_review_not_quantity_update(self):
+        from orders.models import Cart
+        from orders.services.cart import add_to_cart
+        add_to_cart(self.buyer, self.listing, self.slot, 1)
+        item = Cart.objects.get(buyer=self.buyer).items.get()
+        old_price = item.acknowledged_unit_price
+        FoodListing.objects.filter(pk=self.listing.pk).update(price=old_price + 1)
+        self.client.force_login(self.buyer)
+        self.client.post(reverse("orders:update", args=[item.pk]), {"quantity": 1})
+        item.refresh_from_db()
+        self.assertEqual(item.acknowledged_unit_price, old_price)
+        detail = self.client.get(reverse("catalog:detail", args=[self.listing.pk]), {"review_cart_item": item.pk})
+        self.assertContains(detail, "Confirm current ingredients and price")
+        self.client.post(reverse("orders:acknowledge", args=[item.pk]), {"review_token": detail.context["review_token"]})
+        item.refresh_from_db()
+        self.assertEqual(item.acknowledged_unit_price, old_price + 1)
+
+    def test_cart_explains_quote_expiry_and_commission_not_extra_customer_charge(self):
+        from orders.services.cart import add_to_cart
+        add_to_cart(self.buyer, self.listing, self.slot, 1)
+        self.client.force_login(self.buyer)
+        self.client.post(reverse("orders:quote"), {"method": "pickup"})
+        response = self.client.get(reverse("orders:cart"))
+        self.assertContains(response, "Customer total")
+        self.assertContains(response, "deducted from seller food earnings")
+        self.assertContains(response, "is free")
+
+    def test_order_explains_payment_separately_from_fulfillment_and_next_actor(self):
+        from orders.services.cart import add_to_cart
+        from orders.services.checkout import checkout
+        add_to_cart(self.buyer, self.listing, self.slot, 1)
+        order = checkout(self.buyer, idempotency_key="status-explanation", payment_method=Order.PaymentMethod.CASH_PICKUP)
+        self.client.force_login(self.buyer)
+        response = self.client.get(reverse("orders:detail", args=[order.pk]))
+        self.assertContains(response, "Payment status")
+        self.assertContains(response, "Fulfillment status")
+        self.assertContains(response, "Cash due at pickup")
+        self.assertContains(response, "The seller must confirm")
+
+    def test_review_token_rejects_a_second_price_change(self):
+        from orders.models import Cart
+        from orders.services.cart import add_to_cart
+        add_to_cart(self.buyer, self.listing, self.slot, 1)
+        item = Cart.objects.get(buyer=self.buyer).items.get()
+        self.client.force_login(self.buyer)
+        page = self.client.get(reverse("catalog:detail", args=[self.listing.pk]), {"review_cart_item": item.pk})
+        FoodListing.objects.filter(pk=self.listing.pk).update(price=item.acknowledged_unit_price + 2)
+        self.client.post(reverse("orders:acknowledge", args=[item.pk]), {"review_token": page.context["review_token"]})
+        item.refresh_from_db()
+        self.assertEqual(item.acknowledged_unit_price, self.listing.price)
+
+    def test_stale_replacement_confirmation_cannot_clear_changed_cart(self):
+        from orders.models import Cart
+        from orders.services.cart import add_to_cart
+        add_to_cart(self.buyer, self.listing, self.slot, 1)
+        cart = Cart.objects.get(buyer=self.buyer)
+        stale_revision = cart.revision
+        add_to_cart(self.buyer, self.listing, self.slot, 1)
+        self.client.force_login(self.buyer)
+        response = self.client.post(reverse("orders:add", args=[self.listing.pk]), {
+            "slot": self.slot.pk, "quantity": 1, "replace": "yes", "expected_revision": stale_revision,
+        })
+        self.assertContains(response, "Your cart changed")
+        self.assertEqual(cart.items.get().quantity, 2)
 
     def test_failed_payment_order_hides_cancel_action(self):
         from orders.services.cart import add_to_cart

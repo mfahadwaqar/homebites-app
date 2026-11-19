@@ -1,0 +1,19 @@
+01 | 01-home.jpg | Homepage
+02 | 02-catalogue.jpg | Food catalogue: 50 dishes with ratings and calories
+03 | 03-halal-filter.jpg | Dietary filters: vegetarian, vegan, halal
+04 | 04-dish-details.jpg | Food details: ingredients, calories, reviews
+05 | 05-delivery-price.jpg | Distance-based delivery fee, updates automatically
+06 | 06-checkout.jpg | Checkout and order placed
+07 | 07-pay-promptpay.jpg | Payment: PromptPay QR
+08 | 08-pay-received.jpg | Payment received
+09 | 09-pay-card.jpg | Payment: card
+10 | 10-order-tracking.jpg | Order tracking with progress line
+11 | 11-receipt.jpg | Digital receipt
+12 | 12-preorder.jpg | Pre-order windows with deadlines
+13 | 13-seller-approval.jpg | Admin approves seller applications
+14 | 14-seller-halal.jpg | Seller offers with halal label
+15 | 15-seller-status.jpg | Seller updates order status step by step
+16 | 16-delivery-chain.jpg | Delivery: out for delivery, delivered, completed
+17 | 17-seller-dashboard.jpg | Seller dashboard: sales, earnings, 10% commission
+18 | 18-review-submit.jpg | Customer review awaiting moderation
+19 | 19-moderation.jpg | Admin moderation of reviews and reports

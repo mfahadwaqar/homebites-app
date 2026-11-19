@@ -1,0 +1,42 @@
+services:
+  - type: web
+    name: homebites
+    runtime: python
+    plan: free
+    buildCommand: >-
+      pip install -r requirements.txt &&
+      python manage.py collectstatic --noinput &&
+      python manage.py migrate --noinput &&
+      python manage.py seed_catalogue &&
+      python manage.py seed_demo &&
+      python manage.py seed_sample_reviews &&
+      python manage.py set_demo_passwords
+    startCommand: python manage.py refresh_demo_availability && gunicorn config.wsgi:application --bind 0.0.0.0:$PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.13.5
+      - key: DJANGO_SECRET_KEY
+        generateValue: true
+      - key: DJANGO_DEBUG
+        value: "false"
+      - key: DJANGO_ALLOWED_HOSTS
+        value: ".onrender.com"
+      - key: DEMO_PASSWORD
+        generateValue: true
+      - key: POSTGRES_SSLMODE
+        value: require
+      - key: POSTGRES_DB
+        fromDatabase: {name: homebites-db, property: database}
+      - key: POSTGRES_USER
+        fromDatabase: {name: homebites-db, property: user}
+      - key: POSTGRES_PASSWORD
+        fromDatabase: {name: homebites-db, property: password}
+      - key: POSTGRES_HOST
+        fromDatabase: {name: homebites-db, property: host}
+      - key: POSTGRES_PORT
+        fromDatabase: {name: homebites-db, property: port}
+databases:
+  - name: homebites-db
+    plan: free
+    databaseName: homebites
+    user: homebites

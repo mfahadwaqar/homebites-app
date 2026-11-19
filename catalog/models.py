@@ -1,6 +1,7 @@
 from decimal import Decimal
 
 from django.core.exceptions import ValidationError
+from django.core.validators import MinValueValidator, MaxValueValidator
 from django.db import models
 from django.db.models import Q
 
@@ -14,7 +15,7 @@ COUNTRIES = {
     "NP": "Nepal",
     "IN": "India",
 }
-DIETARY_TAGS = {"vegetarian": "Vegetarian", "vegan": "Vegan"}
+DIETARY_TAGS = {"vegetarian": "Vegetarian", "vegan": "Vegan", "halal": "Halal"}
 
 
 def validate_ingredients(value):
@@ -44,13 +45,34 @@ class Country(models.Model):
         return self.name
 
 
+DISH_CATEGORIES = {"main": "Main dishes", "snack": "Snacks and street food", "dessert": "Desserts"}
+DESSERT_CODES = {"TH10", "PK10", "BD10", "NP07", "NP10", "IN10"}
+SNACK_CODES = {"PK05", "PK09", "BD09", "NP01", "NP03", "NP06", "IN08"}
+
+
+def category_for(code):
+    return "dessert" if code in DESSERT_CODES else "snack" if code in SNACK_CODES else "main"
+
+
 class Dish(models.Model):
     code = models.CharField(max_length=4, primary_key=True)
+    category = models.CharField(max_length=10, choices=list(DISH_CATEGORIES.items()), default="main", db_index=True)
     country = models.ForeignKey(Country, on_delete=models.PROTECT, related_name="dishes")
     name = models.CharField(max_length=120)
     description = models.TextField(blank=True)
     image_ref = models.CharField(max_length=200, blank=True)
     default_ingredients = models.JSONField(default=list)
+
+    @property
+    def illustrative_image(self):
+        """Local cuisine photo for offers without a seller-supplied photograph."""
+        from catalog.photos import photo_for_dish
+        photo = photo_for_dish(self.code)
+        if photo:
+            return photo["path"]
+        if self.code == "PK01":
+            return "catalog/food/hero-biryani.webp"
+        return f"catalog/food/{COUNTRIES[self.country_id].lower()}.webp"
 
     class Meta:
         ordering = ["country__name", "name"]
@@ -97,20 +119,75 @@ class FoodListing(models.Model):
     dietary_tags = models.JSONField(default=list, blank=True)
     ingredient_version = models.PositiveIntegerField(default=1)
     ingredients_reviewed = models.BooleanField(default=False)
+    calories_kcal = models.PositiveIntegerField(
+        null=True, blank=True, validators=[MinValueValidator(1), MaxValueValidator(10000)],
+        verbose_name="Estimated kcal per serving",
+        help_text="Use a documented estimate for this recipe, not a value inferred from its name or photo.",
+    )
+    serving_size = models.CharField(max_length=120, blank=True,
+        help_text="Describe the serving, for example 1 bowl (300 g).")
+    nutrition_source = models.CharField(max_length=300, blank=True,
+        help_text="Recipe URL, package reference, or documented seller estimate and calculation basis.")
+    nutrition_reviewed = models.BooleanField(default=False,
+        help_text="Confirm that the serving size and estimate apply to the ingredients in this offer.")
     status = models.CharField(max_length=12, choices=Status.choices, default=Status.DRAFT, db_index=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     objects = FoodListingQuerySet.as_manager()
 
+    @property
+    def has_nutrition(self):
+        return bool(self.calories_kcal and self.serving_size.strip()
+                    and self.nutrition_source.strip() and self.nutrition_reviewed)
+
+    @property
+    def catalogue_photo(self):
+        from catalog.photos import photo_for_dish
+        # Never attribute a catalogue credit to a seller upload, and never show a
+        # photograph that contradicts a seller-declared diet. Each record carries
+        # an optional "diet" ("vegan" or "vegetarian") only when the pictured dish
+        # contains no meat, fish or (for vegan) dairy/egg.
+        if self.image:
+            return None
+        photo = photo_for_dish(self.dish_id)
+        meat_free = [tag for tag in self.dietary_tags if tag in ("vegetarian", "vegan")]
+        if not photo or not meat_free:
+            return photo
+        allowed = {"vegan"} if "vegan" in meat_free else {"vegan", "vegetarian"}
+        return photo if photo.get("diet") in allowed else None
+
+    @property
+    def illustrative_image(self):
+        photo = self.catalogue_photo
+        if photo:
+            return photo["path"]
+        if "vegetarian" in self.dietary_tags or "vegan" in self.dietary_tags:
+            if self.dish.code == "TH01" and "vegan" not in self.dietary_tags:
+                return "catalog/food/pad-thai-vegetarian.webp"
+            return f"catalog/food/{COUNTRIES[self.dish.country_id].lower()}-vegetarian.webp"
+        return self.dish.illustrative_image
+
     class Meta:
         constraints = [
             models.UniqueConstraint(fields=["seller", "dish"], name="unique_seller_dish"),
             models.CheckConstraint(condition=Q(price__gt=0), name="listing_price_positive"),
+            models.CheckConstraint(condition=Q(calories_kcal__isnull=True) | Q(calories_kcal__gte=1, calories_kcal__lte=10000), name="listing_calories_valid"),
         ]
         ordering = ["dish__name", "seller__storefront_name"]
 
     def clean(self):
+        self.serving_size = self.serving_size.strip()
+        self.nutrition_source = self.nutrition_source.strip()
+        nutrition = {
+            "calories_kcal": self.calories_kcal is not None,
+            "serving_size": bool(self.serving_size),
+            "nutrition_source": bool(self.nutrition_source),
+            "nutrition_reviewed": self.nutrition_reviewed,
+        }
+        if any(nutrition.values()) and not all(nutrition.values()):
+            raise ValidationError({key: "Provide calories, serving size and source, and confirm the estimate together; or leave all nutrition fields empty."
+                                   for key, present in nutrition.items() if not present})
         if self.price is not None and self.price <= Decimal("0"):
             raise ValidationError({"price": "Price must be positive."})
         if self.ingredients:
@@ -141,9 +218,15 @@ class FoodListing(models.Model):
                 self.ingredients_reviewed = False
                 self.status = self.Status.DRAFT
                 self.dietary_tags = []
+                # A previous estimate must not silently follow a changed recipe.
+                self.calories_kcal = None
+                self.serving_size = ""
+                self.nutrition_source = ""
+                self.nutrition_reviewed = False
                 if kwargs.get("update_fields") is not None:
                     kwargs["update_fields"] = set(kwargs["update_fields"]) | {
-                        "ingredient_version", "ingredients_reviewed", "status", "dietary_tags"
+                        "ingredient_version", "ingredients_reviewed", "status", "dietary_tags",
+                        "calories_kcal", "serving_size", "nutrition_source", "nutrition_reviewed"
                     }
         self.full_clean()
         return super().save(*args, **kwargs)

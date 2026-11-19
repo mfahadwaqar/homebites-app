@@ -14,7 +14,7 @@
       </article>
     {% endfor %}
   {% else %}
-    <p>No reviews yet.</p>
+    <p>No published reviews yet.</p>
   {% endif %}
   <p><a href="{% url 'reviews:report_seller' seller.pk %}">Report this seller</a></p>
 </section>

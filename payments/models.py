@@ -4,18 +4,18 @@ from django.db.models import Q
 
 class PaymentAttempt(models.Model):
     class State(models.TextChoices):
-        PENDING = "pending", "Pending simulated payment"
-        SUCCEEDED = "succeeded", "Simulated payment succeeded"
-        FAILED = "failed", "Simulated payment failed"
-        CANCELLED = "cancelled", "Mock attempt cancelled"
-        CASH_DUE = "cash_due", "Simulated cash due"
-        CASH_COLLECTED = "cash_collected", "Simulated cash collected"
-        SIMULATED_REFUNDED = "simulated_refunded", "Simulated refund"
+        PENDING = "pending", "Payment pending"
+        SUCCEEDED = "succeeded", "Payment received"
+        FAILED = "failed", "Payment failed"
+        CANCELLED = "cancelled", "Payment cancelled"
+        CASH_DUE = "cash_due", "Cash due"
+        CASH_COLLECTED = "cash_collected", "Cash collected"
+        SIMULATED_REFUNDED = "simulated_refunded", "Refunded"
 
     order = models.ForeignKey("orders.Order", on_delete=models.PROTECT, related_name="payment_attempts")
     method = models.CharField(max_length=20, choices=[
-        ("mock_promptpay", "Mock PromptPay"),
-        ("mock_card", "Mock card"),
+        ("mock_promptpay", "PromptPay"),
+        ("mock_card", "Card"),
         ("cash_delivery", "Cash on delivery"),
         ("cash_pickup", "Cash on pickup"),
     ])

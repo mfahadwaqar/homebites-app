@@ -30,6 +30,6 @@ class DishAdmin(admin.ModelAdmin):
 
 @admin.register(FoodListing)
 class FoodListingAdmin(admin.ModelAdmin):
-    list_display = ["dish", "seller", "price", "status", "ingredients_reviewed"]
+    list_display = ["dish", "seller", "price", "status", "ingredients_reviewed", "calories_kcal", "nutrition_reviewed"]
     list_filter = ["status", "ingredients_reviewed", "dish__country"]
     search_fields = ["dish__name", "seller__storefront_name"]

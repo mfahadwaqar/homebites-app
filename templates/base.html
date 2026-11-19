@@ -7,33 +7,41 @@
   <title>{% block title %}HomeBites{% endblock %}</title>
   <link rel="icon" href="{% static 'images/homebites-mark.svg' %}" type="image/svg+xml">
   <link rel="stylesheet" href="{% static 'css/homebites.css' %}">
+  <script src="{% static 'js/homebites.js' %}?v=20261119-3" defer></script>
   {% block extra_styles %}{% endblock %}
+  <link rel="stylesheet" href="{% static 'css/delivery.css' %}?v=20261119-11">
 </head>
 <body>
   <a class="skip-link" href="#main-content">Skip to content</a>
+  <div class="site-chrome">
   <header class="site-header">
     <a class="brand" href="/">HomeBites</a>
-    <nav aria-label="Account">
-      <a href="{% url 'catalog:list' %}">Explore food</a>
+    <button class="nav-toggle" type="button" aria-controls="main-navigation" aria-expanded="false" hidden>Menu <span aria-hidden="true">☰</span></button>
+    <nav id="main-navigation" aria-label="Main navigation">
+      <a href="{% url 'catalog:list' %}"{% if request.resolver_match.namespace == 'catalog' %} aria-current="page"{% endif %}>Explore food</a>
+      <a href="/#kitchens">Meet the kitchens</a>
       {% if user.is_authenticated %}
-        <a href="{% url 'orders:cart' %}">Cart</a>
-        <a href="{% url 'orders:list' %}">Orders</a>
-        <a href="{% url 'sellers:dashboard' %}">Sell</a>
-        <a href="{% url 'accounts:profile' %}">Profile</a>
+        <a class="nav-cart" href="{% url 'orders:cart' %}"{% if request.resolver_match.url_name == 'cart' %} aria-current="page"{% endif %}>Cart</a>
+        <a href="{% url 'orders:list' %}"{% if request.resolver_match.namespace == 'orders' and request.resolver_match.url_name != 'cart' %} aria-current="page"{% endif %}>Orders</a>
+        <a href="{% url 'sellers:dashboard' %}"{% if request.resolver_match.namespace == 'sellers' and request.resolver_match.url_name != 'storefront' %} aria-current="page"{% endif %}>Seller dashboard</a>
+        <a class="nav-user" title="Signed in as {{ user.get_username }}" href="{% url 'accounts:profile' %}"{% if request.resolver_match.url_name == 'profile' %} aria-current="page"{% endif %}><span class="nav-user__hi">Hi,</span><span class="nav-user__name">{{ user.get_username }}</span><span class="sr-only"> (your profile)</span></a>
+        {% if user.is_staff %}<a href="/demo/readiness/">Demo readiness</a>{% endif %}
         <form method="post" action="{% url 'logout' %}">
           {% csrf_token %}
           <button type="submit" class="text-button">Sign out</button>
         </form>
       {% else %}
         <a href="{% url 'login' %}">Sign in</a>
-        <a href="{% url 'accounts:signup' %}">Create account</a>
+        <a class="nav-signup" href="{% url 'accounts:signup' %}">Create account</a>
       {% endif %}
     </nav>
   </header>
+  </div>
   <main class="page-shell" id="main-content" tabindex="-1">
-    {% if messages %}<div aria-live="polite">{% for message in messages %}<p class="form-alert">{{ message }}</p>{% endfor %}</div>{% endif %}
+    {% if messages %}<div aria-live="polite">{% for message in messages %}<p class="form-alert message--{{ message.level_tag }}">{{ message }}</p>{% endfor %}</div>{% endif %}
     {% block content %}{% endblock %}
   </main>
+  <footer class="site-footer"><p>HomeBites is a university project. Orders, payments, delivery and locations are simulated, and dish images are AI-generated illustrations.</p></footer>
 </body>
 </html>
 

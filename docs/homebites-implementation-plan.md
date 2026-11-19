@@ -1,6 +1,16 @@
 # HomeBites — End-to-End Implementation Plan
 
-Status: planning complete; application implementation has not started.
+Status: historical implementation proposal; the simulated application is implemented. For current behavior and verified evidence, use `docs/behavior-rules.md`, `docs/milestones.md` and the 2026-10-16 behavior execution ledger. Items below describe the original design and are not independent completion claims.
+
+Current overrides: Python 3.13, Django 5.2, PostgreSQL 17 via Docker Desktop; server-rendered Django Templates with local custom CSS/JavaScript (Bootstrap was proposed but is not a shipped dependency); cream, forest-green and terracotta palette. Implemented discovery filters are keyword, country, seller-declared diet, price and accepting-orders. Rating/distance filters and a separate live courier/preparation state machine are not implemented. Explicit demo readiness/refresh and the documented seller handoff flow define the current simulation.
+
+### Confirmed requirement update — 22 October 2026
+
+Professor feedback adds **calories per dish** to the required product information. This supersedes any earlier wording that excluded all nutrition information. Place the value beside the seller-specific ingredients, show a defined serving size, and label the value **estimated kcal per serving**. A generic dish name or cuisine photo is not a nutrition source; do not invent values or calculate them from ingredient names alone.
+
+Implementation update 9 November 2026: optional seller-specific kcal, serving size, source and review fields now have storage, seller entry, validation and customer display on details/cards. Complete reviewed sets display as estimated kcal; missing values remain explicitly distinct from zero. Recipe ingredient changes clear previous nutrition and seed reruns preserve seller entries. The additive migration preserved 50 listings and 1 existing order; 74 catalogue/seller tests passed. All 50 sourced recipe estimates remain pending, so the overall calorie-data requirement is not complete. Do not add an external nutrition integration or invent values. Track remaining work in `completion-week.md`.
+
+Acceptance for that follow-up: all 50 initial dishes retain their established countries and ingredient lists; each seller offer can show a reviewed serving size with an estimated kcal value, or the explicit missing-information state; no unsupported nutrition or dietary claims. Verify the populated and missing states on desktop and mobile before marking the requirement complete.
 
 Scope: a fully simulated university project, not a commercial launch. Prepared on 3 September 2026 from the HomeBites Project Proposal Report, the revised presentation, and the subsequent discussion.
 
@@ -38,6 +48,7 @@ Rows marked confirmed reflect the report and the user's subsequent scope decisio
 | Marketplace scope — confirmed | Bangkok-wide positioning; standard orders plus pre-orders; pickup plus distance-based delivery. |
 | Food catalogue — confirmed | Exactly 50 distinct dishes: 10 each from Thailand, Pakistan, Bangladesh, Nepal and India; no other countries for now. |
 | Ingredient visibility — confirmed | A required, readable ingredient list on every published seller listing and its food-detail page. |
+| Calories per dish — confirmed 22 October 2026 | Estimated kcal, serving size, source and review storage/form/display implemented 9 November. Reviewed values for all 50 initial offers remain pending. No fabricated estimates. |
 | Seller catalogue workflow | Sellers choose predefined dishes and manage their own ingredient lists, descriptions/images, prices, quantities and availability. They cannot create new master dishes or countries. |
 | Checkout default | One seller and one fulfillment time slot per order; multiple food items allowed. |
 | Accounts default | Every user can buy; an approved seller profile adds selling capabilities to the same account. |
@@ -181,7 +192,7 @@ Orders are the transaction records connecting buyers and sellers. A separate buy
 
 Order and item snapshots preserve history if a seller changes a price, ingredient list, address or listing. Archive referenced listings instead of removing historical order data. Validate that order items, slots and listings all belong to the same seller.
 
-Keep ingredients simple: a validated JSON list of nonempty ingredient names is sufficient for this simulation. Copy a dish's default ingredient list into a new seller listing as an editable starting point; the seller must review it before publishing. Changing the master defaults must not silently alter existing seller ingredients or historical orders. Ingredient quantities, recipe instructions and nutrition calculations are not required.
+Keep ingredients simple: a validated JSON list of nonempty ingredient names is sufficient for this simulation. Copy a dish's default ingredient list into a new seller listing as an editable starting point; the seller must review it before publishing. Changing the master defaults must not silently alter existing seller ingredients or historical orders. Ingredient quantities and recipe instructions are not required. The October 2026 calorie requirement adds serving-size and estimated-kcal information; automated nutrition calculations remain outside scope.
 
 Enforce the five-country/50-dish scope through a versioned seed manifest, catalogue validation and restricted administrative forms; ordinary database uniqueness constraints alone do not enforce the total count. The seed manifest must contain exactly 10 distinct catalogue identifiers per country. Seller listing count may grow only by offering existing catalogue dishes, not by expanding the master catalogue.
 
@@ -394,7 +405,7 @@ Seed several fictional customer accounts, approved and pending sellers, multiple
 | India | 10 |
 | Total | 50 |
 
-During P2, prepare a versioned catalogue manifest with stable dish identifiers, country, dish name, description, local image reference, representative ingredients and initial seller/price assignments. Use representative simulated recipes rather than claiming a single universal recipe for a dish. Every initial listing must have reviewed ingredients, and the final seed dataset must make all 50 dishes discoverable. Ingredient quantities and nutritional analysis are unnecessary.
+During P2, prepare a versioned catalogue manifest with stable dish identifiers, country, dish name, description, local image reference, representative ingredients and initial seller/price assignments. Use representative simulated recipes rather than claiming a single universal recipe for a dish. Every initial listing must have reviewed ingredients, and the final seed dataset must make all 50 dishes discoverable. Ingredient quantities and automated nutritional analysis are unnecessary. The October 2026 requirement separately calls for reviewed estimated kcal with serving size; see the pending follow-up above.
 
 Use additional seller offers for existing dishes only when a test or demo scenario needs them; such offers must not expand the 50 distinct dishes. Seed operations must not overwrite user-edited listings or ingredient lists. Additional countries and unrestricted seller-created dishes are deferred unless the user changes the scope.
 
@@ -436,6 +447,7 @@ Deployment for this project means reproducible local installation and classroom 
 | 4.1 — Customer, seller and administrator roles | P1, P2, P6, P7 |
 | 4.2 — Listings, categories, quantities and filtering | P2, P3 |
 | Subsequent user scope — five countries, 10 dishes each, visible ingredients | P2, P3, P5, P8, P9; 50 distinct dishes, predefined seller selection, ingredient display and order snapshots |
+| Professor feedback — calories per dish (22 October 2026) | Nutrition storage, seller entry/validation and customer display implemented 9 November. All 50 reviewed sourced estimates remain pending. |
 | 4.3 — Pre-orders and deadlines | P2, P5, P6 |
 | 4.4–4.5 — Locations, distance, pickup and delivery | P4, P6; external location/physical delivery explicitly simulated |
 | 4.6 — Order processing and tracking | P3, P5, P6 |

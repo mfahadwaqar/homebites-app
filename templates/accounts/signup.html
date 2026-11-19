@@ -1,11 +1,11 @@
 {% extends "base.html" %}
 
-{% block title %}Create account — HomeBites{% endblock %}
+{% block title %}Create account | HomeBites{% endblock %}
 
 {% block content %}
 <section class="account-panel" aria-labelledby="signup-title">
   <h1 id="signup-title">Create your HomeBites account</h1>
-  <p>Use fictional details for this university demonstration.</p>
+  <p>Create an account to order from home kitchens across Bangkok.</p>
   <form method="post" class="stacked-form" novalidate>
     {% csrf_token %}
     {{ form.non_field_errors }}

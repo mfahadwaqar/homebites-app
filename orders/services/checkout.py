@@ -16,8 +16,9 @@ from orders.models import (
     OrderItem,
 )
 from orders.pricing import calculate_totals
-from orders.services.cart import CartError
-from orders.services.quotes import create_quote, valid_quote_for_cart
+from orders.availability import booking_cutoff, window_problem
+from orders.services.cart import CartError, cart_groups
+from orders.services.quotes import create_quotes, latest_valid_quote
 
 
 HOLD_LIFETIME = timedelta(minutes=15)
@@ -27,15 +28,15 @@ class CheckoutConflict(CartError):
     """The cart needs a fresh review before it can become an order."""
 
 
-def _lock_and_validate_items(cart, now):
-    items = list(cart.items.select_related("listing__dish__country", "listing__seller").order_by("listing_id"))
+def _lock_and_validate_items(cart, group, now):
+    items = sorted(group.items, key=lambda i: i.listing_id)
     if not items:
         raise CheckoutConflict("Add a dish before checking out.")
     locked_stocks = {}
     for item in items:
         listing = item.listing
-        if listing.seller_id != cart.seller_id or listing.seller.user_id == cart.buyer_id:
-            raise CheckoutConflict("Cart items must belong to one other seller.")
+        if listing.seller.user_id == cart.buyer_id:
+            raise CheckoutConflict("You cannot order from your own storefront.")
         if not FoodListing.objects.public().filter(pk=listing.pk).exists():
             raise CheckoutConflict("A dish or its seller is no longer available.")
         if (
@@ -43,23 +44,22 @@ def _lock_and_validate_items(cart, now):
             or item.acknowledged_unit_price != listing.price
         ):
             raise CheckoutConflict("Ingredients or price changed. Review your cart again.")
-        stock = ListingStock.objects.select_for_update().filter(listing=listing, slot=cart.slot).first()
+        stock = ListingStock.objects.select_for_update().filter(listing=listing, slot=group.slot).first()
         if stock is None or stock.available < item.quantity:
             raise CheckoutConflict("Not enough portions remain for this slot.")
         locked_stocks[item.pk] = stock
     return items, locked_stocks
 
 
-def _validate_slot_and_method(cart, now):
-    if cart.seller_id is None or cart.slot_id is None:
+def _validate_slot_and_method(cart, group, now):
+    if group.seller is None or group.slot is None:
         raise CheckoutConflict("Choose a seller and fulfillment slot.")
-    slot = FulfillmentSlot.objects.select_for_update().get(pk=cart.slot_id)
-    if slot.seller_id != cart.seller_id or not slot.is_active or slot.ends_at <= now:
+    slot = FulfillmentSlot.objects.select_for_update().get(pk=group.slot.pk)
+    if slot.seller_id != group.seller.pk:
         raise CheckoutConflict("The fulfillment slot is unavailable.")
-    if slot.order_type == FulfillmentSlot.OrderType.PREORDER and (
-        slot.preorder_deadline is None or slot.preorder_deadline <= now
-    ):
-        raise CheckoutConflict("The pre-order deadline has passed.")
+    problem = window_problem(slot, at=now)
+    if problem:
+        raise CheckoutConflict(problem)
     if cart.method == Cart.Method.PICKUP and not slot.allows_pickup:
         raise CheckoutConflict("Pickup is unavailable for this slot.")
     if cart.method == Cart.Method.DELIVERY and not slot.allows_delivery:
@@ -79,92 +79,120 @@ def _payment_is_compatible(cart, payment_method):
     return True
 
 
+def _existing_orders(buyer, idempotency_key):
+    from django.db.models import Q
+
+    return list(
+        Order.objects.filter(buyer=buyer)
+        .filter(Q(idempotency_key=idempotency_key) | Q(idempotency_key__startswith=idempotency_key + ":"))
+        .order_by("pk")
+    )
+
+
+def _order_key(idempotency_key, index, total):
+    return idempotency_key if total == 1 else f"{idempotency_key}:{index + 1}"
+
+
 @transaction.atomic
-def checkout(buyer, *, idempotency_key, payment_method):
-    """Create exactly one order for a buyer/key and reserve portions atomically."""
+def checkout_orders(buyer, *, idempotency_key, payment_method):
+    """Place one order per kitchen and window in the cart. All succeed or none do."""
     if not buyer.is_authenticated:
         raise CheckoutConflict("Sign in before checkout.")
-    if not idempotency_key or len(idempotency_key) > 80:
+    if not idempotency_key or len(idempotency_key) > 70:
         raise CheckoutConflict("Provide a valid checkout request key.")
-    existing = Order.objects.filter(buyer=buyer, idempotency_key=idempotency_key).first()
+    existing = _existing_orders(buyer, idempotency_key)
     if existing:
-        if existing.payment_method != payment_method:
+        if any(o.payment_method != payment_method for o in existing):
             raise CheckoutConflict("This checkout request used another payment method.")
         return existing
 
     cart = Cart.objects.select_for_update().get(buyer=buyer)
-    # A concurrent retry waits for the same cart lock, then observes the first order.
-    existing = Order.objects.filter(buyer=buyer, idempotency_key=idempotency_key).first()
+    # A concurrent retry waits for the same cart lock, then observes the first orders.
+    existing = _existing_orders(buyer, idempotency_key)
     if existing:
-        if existing.payment_method != payment_method:
+        if any(o.payment_method != payment_method for o in existing):
             raise CheckoutConflict("This checkout request used another payment method.")
         return existing
     if not _payment_is_compatible(cart, payment_method):
         raise CheckoutConflict("Payment method does not match pickup or delivery.")
 
     now = timezone.now()
-    slot = _validate_slot_and_method(cart, now)
-    items, stocks = _lock_and_validate_items(cart, now)
-    quote = DeliveryQuote.objects.filter(cart=cart).order_by("-created_at", "-pk").first()
-    if cart.method == Cart.Method.DELIVERY and not valid_quote_for_cart(cart, quote, now=now):
-        raise CheckoutConflict("Delivery quote changed or expired. Get a new quote.")
-    if cart.method == Cart.Method.PICKUP and not valid_quote_for_cart(cart, quote, now=now):
-        quote = create_quote(buyer)
-    totals = calculate_totals(quote.food_subtotal, quote.fee)
+    groups = cart_groups(cart)
+    if not groups:
+        raise CheckoutConflict("Add a dish before checking out.")
     online = payment_method in (Order.PaymentMethod.MOCK_PROMPTPAY, Order.PaymentMethod.MOCK_CARD)
-    expires_at = min(now + HOLD_LIFETIME, slot.preorder_deadline or slot.ends_at) if online else None
-    if online and expires_at <= now:
-        raise CheckoutConflict("The payment window has closed.")
-    destination = cart.destination if cart.method == Cart.Method.DELIVERY else None
-    order = Order.objects.create(
-        buyer=buyer,
-        seller=cart.seller,
-        slot=slot,
-        idempotency_key=idempotency_key,
-        status=Order.Status.PENDING_PAYMENT if online else Order.Status.CASH_DUE,
-        payment_method=payment_method,
-        fulfillment_method=cart.method,
-        origin_snapshot=quote.origin.label if quote.origin else "",
-        destination=destination,
-        destination_snapshot=destination.label if destination else "",
-        distance_km=quote.distance_km,
-        tariff_version=quote.tariff_version,
-        food_subtotal=totals.food_subtotal,
-        delivery_fee=totals.delivery_fee,
-        customer_total=totals.customer_total,
-        commission_rate=totals.commission_rate,
-        commission=totals.commission,
-        seller_food_earnings=totals.seller_food_earnings,
-        hold_expires_at=expires_at,
-    )
-    for item in items:
-        stock = stocks[item.pk]
-        listing = item.listing
-        order_item = OrderItem.objects.create(
-            order=order,
-            listing=listing,
-            dish_name_snapshot=listing.dish.name,
-            country_snapshot=listing.dish.country.name,
-            ingredients_snapshot=list(listing.ingredients),
-            unit_price=listing.price,
-            quantity=item.quantity,
-            line_total=listing.price * item.quantity,
-        )
-        if online:
-            stock.held += item.quantity
-        else:
-            stock.committed += item.quantity
-        stock.save(update_fields=["held", "committed"])
-        InventoryReservation.objects.create(
-            item=order_item,
-            stock=stock,
-            quantity=item.quantity,
-            state=InventoryReservation.State.HELD if online else InventoryReservation.State.COMMITTED,
-            expires_at=expires_at,
-        )
     from orders.services.workflow import record_order_event
 
-    record_order_event(order, "", actor=buyer, note="Buyer placed a simulated order.")
+    # Validate every kitchen before creating anything.
+    prepared = []
+    for group in groups:
+        slot = _validate_slot_and_method(cart, group, now)
+        items, stocks = _lock_and_validate_items(cart, group, now)
+        quote = latest_valid_quote(cart, group, now=now)
+        if quote is None:
+            if cart.method == Cart.Method.DELIVERY:
+                raise CheckoutConflict("Delivery quote changed or expired. Get a new quote.")
+            create_quotes(buyer)
+            quote = latest_valid_quote(cart, group, now=now)
+            if quote is None:
+                raise CheckoutConflict("Delivery quote changed or expired. Get a new quote.")
+        expires_at = min(now + HOLD_LIFETIME, booking_cutoff(slot)) if online else None
+        if online and expires_at <= now:
+            raise CheckoutConflict("The payment window has closed.")
+        prepared.append((group, slot, items, stocks, quote, expires_at))
+
+    destination = cart.destination if cart.method == Cart.Method.DELIVERY else None
+    orders = []
+    for index, (group, slot, items, stocks, quote, expires_at) in enumerate(prepared):
+        totals = calculate_totals(quote.food_subtotal, quote.fee)
+        order = Order.objects.create(
+            buyer=buyer,
+            seller=group.seller,
+            slot=slot,
+            idempotency_key=_order_key(idempotency_key, index, len(prepared)),
+            status=Order.Status.PENDING_PAYMENT if online else Order.Status.CASH_DUE,
+            payment_method=payment_method,
+            fulfillment_method=cart.method,
+            origin_snapshot=quote.origin.label if quote.origin else "",
+            destination=destination,
+            destination_snapshot=destination.label if destination else "",
+            distance_km=quote.distance_km,
+            tariff_version=quote.tariff_version,
+            food_subtotal=totals.food_subtotal,
+            delivery_fee=totals.delivery_fee,
+            customer_total=totals.customer_total,
+            commission_rate=totals.commission_rate,
+            commission=totals.commission,
+            seller_food_earnings=totals.seller_food_earnings,
+            hold_expires_at=expires_at,
+        )
+        for item in items:
+            stock = stocks[item.pk]
+            listing = item.listing
+            order_item = OrderItem.objects.create(
+                order=order,
+                listing=listing,
+                dish_name_snapshot=listing.dish.name,
+                country_snapshot=listing.dish.country.name,
+                ingredients_snapshot=list(listing.ingredients),
+                unit_price=listing.price,
+                quantity=item.quantity,
+                line_total=listing.price * item.quantity,
+            )
+            if online:
+                stock.held += item.quantity
+            else:
+                stock.committed += item.quantity
+            stock.save(update_fields=["held", "committed"])
+            InventoryReservation.objects.create(
+                item=order_item,
+                stock=stock,
+                quantity=item.quantity,
+                state=InventoryReservation.State.HELD if online else InventoryReservation.State.COMMITTED,
+                expires_at=expires_at,
+            )
+        record_order_event(order, "", actor=buyer, note="Order placed.")
+        orders.append(order)
     cart.items.all().delete()
     cart.seller = None
     cart.slot = None
@@ -172,7 +200,12 @@ def checkout(buyer, *, idempotency_key, payment_method):
     cart.method = Cart.Method.PICKUP
     cart.revision += 1
     cart.save()
-    return order
+    return orders
+
+
+def checkout(buyer, *, idempotency_key, payment_method):
+    """Place the cart as orders and return the first one (a single-kitchen cart gives exactly one)."""
+    return checkout_orders(buyer, idempotency_key=idempotency_key, payment_method=payment_method)[0]
 
 
 def _release_reservations(order):
@@ -208,7 +241,7 @@ def expire_reservations(*, now=None):
             order.save(update_fields=["status", "updated_at"])
             from orders.services.workflow import record_order_event
 
-            record_order_event(order, previous_status, note="Mock payment hold expired.")
+            record_order_event(order, previous_status, note="Payment hold expired.")
             count += 1
     return count
 

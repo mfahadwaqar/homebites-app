@@ -1,45 +1,101 @@
 {% extends "base.html" %}
-
-{% block title %}Simulated payment · HomeBites{% endblock %}
+{% load payment_extras %}
+{% block title %}Payment for order #{{ order.pk }} | HomeBites{% endblock %}
 
 {% block content %}
-<section class="order-page" aria-labelledby="payment-title">
-  <p class="intro__label">University demo · no real transaction</p>
+<section class="checkout-page" aria-labelledby="payment-title">
+  <p class="checkout-steps" aria-label="Checkout progress"><span>1 Cart</span><span{% if attempt.state != "succeeded" and order.payment_method != "cash_pickup" and order.payment_method != "cash_delivery" %} class="is-current"{% endif %}>2 Payment</span><span{% if attempt.state == "succeeded" or order.payment_method == "cash_pickup" or order.payment_method == "cash_delivery" %} class="is-current"{% endif %}>3 Confirmation</span></p>
   <h1 id="payment-title">Payment for order #{{ order.pk }}</h1>
-  <p>Every payment and delivery step on HomeBites is simulated. Never enter actual card or banking details.</p>
-  <div class="order-card"><dl class="order-totals">
-    <div><dt>Amount shown</dt><dd>฿{{ order.customer_total }}</dd></div>
-    <div><dt>Method</dt><dd>{{ order.get_payment_method_display }}</dd></div>
-    <div><dt>Order status</dt><dd>{{ order.get_status_display }}</dd></div>
-  </dl></div>
+  <p class="checkout-lead">{{ presentation.next_action }}</p>
+  {% if next_unpaid %}<p class="form-alert">You have another order waiting for payment: <a href="{% url 'payments:pay' next_unpaid.pk %}">Order #{{ next_unpaid.pk }} from {{ next_unpaid.seller.storefront_name }}</a>.</p>{% endif %}
 
-  {% if order.payment_method == "cash_delivery" or order.payment_method == "cash_pickup" %}
-    <p>Cash is marked as due in this demo. The seller will record a simulated collection at handoff. Do not pay anyone through this website.</p>
-  {% elif order.status == "pending_payment" and attempt and attempt.state == "pending" %}
-    <div class="order-card" role="note">
-      <strong>DEMO ONLY — NOT PAYABLE</strong><br>
-      {% if order.payment_method == "mock_promptpay" %}
-        This is a mock PromptPay reference, not a scannable QR code.<br>
+  <div class="checkout-layout">
+    <div class="checkout-main">
+
+      {% if order.payment_method == "cash_delivery" or order.payment_method == "cash_pickup" %}
+        <div class="pay-card pay-state pay-state--cash">
+          <h2>Pay when you receive it</h2>
+          <p>Your order is confirmed for cash payment. The seller will record the payment when you receive your food.</p>
+          <p class="pay-amount">฿{{ order.customer_total }}</p>
+          <p class="pay-card__meta">{{ order.get_payment_method_display }} · {{ order.get_fulfillment_method_display }}{% if order.destination_snapshot %} to {{ order.destination_snapshot }}{% endif %}</p>
+          <p class="pay-state__actions"><a class="primary-link" href="{% url 'orders:detail' order.pk %}">Track your order</a> <a class="btn-link" href="{% url 'orders:receipt' order.pk %}">View receipt</a></p>
+        </div>
+
+      {% elif presentation.can_pay and attempt and attempt.state == "pending" %}
+        {% if order.payment_method == "mock_promptpay" %}
+          <div class="pay-card pay-method">
+            <h2>PromptPay</h2>
+            <div class="pay-method__body">
+              <div class="pay-method__qr">{{ attempt.mock_reference|mock_qr }}<p class="pay-card__meta">Scan to pay with your banking app.</p></div>
+              <ol class="pay-steps">
+                <li>Open your banking app.</li>
+                <li>Scan the code and check the amount.</li>
+                <li>Confirm the payment, then press Pay below.</li>
+              </ol>
+            </div>
+            <dl class="pay-facts"><div><dt>Amount</dt><dd>฿{{ order.customer_total }}</dd></div><div><dt>Reference</dt><dd>{{ attempt.mock_reference }}</dd></div><div><dt>Pay to</dt><dd>{{ order.seller.storefront_name }}</dd></div></dl>
+          </div>
+        {% else %}
+          <div class="pay-card pay-method">
+            <h2>Card payment</h2>
+            <div class="mock-card" aria-hidden="true"><span class="mock-card__chip"></span><span class="mock-card__number">•••• •••• •••• 0000</span><span class="mock-card__row"><span>HOMEBITES</span><span>--/--</span></span></div>
+            <p>No card number, expiry date or security code is requested on this page. Press Pay to complete the payment.</p>
+            <dl class="pay-facts"><div><dt>Amount</dt><dd>฿{{ order.customer_total }}</dd></div><div><dt>Reference</dt><dd>{{ attempt.mock_reference }}</dd></div></dl>
+          </div>
+        {% endif %}
+        <form class="pay-card pay-actions" method="post" action="{% url 'payments:result' order.pk %}">
+          {% csrf_token %}
+          <input type="hidden" name="amount" value="{{ order.customer_total }}">
+          <button class="pay-actions__main" type="submit" name="outcome" value="succeeded">{% if order.payment_method == "mock_promptpay" %}I've paid ฿{{ order.customer_total }}{% else %}Pay ฿{{ order.customer_total }}{% endif %}</button>
+        </form>
+        <form class="pay-cancel" method="post" action="{% url 'orders:cancel' order.pk %}">{% csrf_token %}<button class="text-button" type="submit">Cancel payment and order</button></form>
+        {% if order.hold_expires_at %}<p class="pay-countdown" data-expires="{{ order.hold_expires_at|date:'c' }}">Portions are held until {{ order.hold_expires_at|date:"j M Y, H:i" }} Bangkok time. <span class="pay-countdown__left"></span></p>{% endif %}
+
+      {% elif attempt and attempt.state == "succeeded" %}
+        <div class="pay-card pay-state pay-state--ok">
+          <h2>Payment received</h2>
+          <p>Thank you. The seller must now confirm your order.</p>
+          <p class="pay-amount">฿{{ order.customer_total }}</p>
+          <p class="pay-card__meta">Reference {{ attempt.mock_reference }} · {{ order.get_payment_method_display }}</p>
+          <p class="pay-state__actions"><a class="primary-link" href="{% url 'orders:detail' order.pk %}">Track your order</a> <a class="btn-link" href="{% url 'orders:receipt' order.pk %}">View receipt</a></p>
+        </div>
+      {% elif attempt and attempt.state == "failed" %}
+        <div class="pay-card pay-state pay-state--bad">
+          <h2>Payment failed</h2>
+          <p>Your payment did not go through and the portions were released. Start a new checkout to try again.</p>
+          <p class="pay-state__actions">{% for item in order.items.all|slice:":1" %}<a class="primary-link" href="{% url 'catalog:detail' item.listing_id %}">Try again</a> {% endfor %}<a class="btn-link" href="{% url 'catalog:list' %}?available=1">Browse food</a></p>
+        </div>
+      {% elif attempt and attempt.state == "pending" %}
+        <div class="pay-card pay-state pay-state--bad">
+          <h2>Payment window closed</h2>
+          <p>The hold expired. Choose the dishes again and start a fresh checkout.</p>
+          <p><a class="primary-link" href="{% url 'catalog:list' %}?available=1">Find food</a></p>
+        </div>
+      {% elif attempt %}
+        <div class="pay-card pay-state"><h2>{{ attempt.get_state_display }}</h2><p>Payment status: {{ attempt.get_state_display }}.</p></div>
       {% else %}
-        This is a mock card gateway. No card number, expiry date or security code is requested.<br>
+        <div class="pay-card pay-state"><p>No payment is due for this order.</p></div>
       {% endif %}
-      Reference: {{ attempt.mock_reference }}
+
     </div>
-    <p>Choose an outcome to demonstrate the checkout flow:</p>
-    <form class="order-card" method="post" action="{% url 'payments:result' order.pk %}">
-      {% csrf_token %}
-      <input type="hidden" name="amount" value="{{ order.customer_total }}">
-      <button type="submit" name="outcome" value="succeeded">Simulate success</button>
-      <button type="submit" name="outcome" value="failed">Simulate failure</button>
-      <button type="submit" name="outcome" value="pending">Keep pending</button>
-    </form>
-    <p>Hold expires {{ order.hold_expires_at|date:"j M Y, H:i" }} (Bangkok time).</p>
-  {% elif attempt %}
-    <p>Mock payment state: {{ attempt.get_state_display }}.</p>
-    {% if attempt.state == "failed" %}<p>Start a new checkout to retry after fresh stock and timing checks.</p>{% endif %}
-  {% else %}
-    <p>No payable mock attempt is available for this order.</p>
-  {% endif %}
-  <p><a href="{% url 'orders:detail' order.pk %}">Back to order</a></p>
+
+    <aside class="checkout-side">
+      <div class="pay-card summary">
+        <h2>Order #{{ order.pk }}</h2>
+        <ul class="summary__items">{% for item in order.items.all %}<li><span>{{ item.dish_name_snapshot }} × {{ item.quantity }}</span><span>฿{{ item.line_total }}</span></li>{% endfor %}</ul>
+        <dl class="order-totals">
+          <div><dt>Food</dt><dd>฿{{ order.food_subtotal }}</dd></div>
+          <div><dt>Delivery</dt><dd>฿{{ order.delivery_fee }}</dd></div>
+          <div class="order-totals__total"><dt>Total</dt><dd>฿{{ order.customer_total }}</dd></div>
+        </dl>
+        <dl class="pay-facts">
+          <div><dt>Method</dt><dd>{{ order.get_payment_method_display }}</dd></div>
+          <div><dt>Order status</dt><dd>{{ order.display_status }}</dd></div>
+          <div><dt>Kitchen</dt><dd>{{ order.seller.storefront_name }}</dd></div>
+        </dl>
+        <p><a href="{% url 'orders:detail' order.pk %}">View order</a> · <a href="{% url 'orders:receipt' order.pk %}">Receipt</a></p>
+      </div>
+    </aside>
+  </div>
 </section>
 {% endblock %}

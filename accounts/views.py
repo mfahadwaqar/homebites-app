@@ -1,27 +1,35 @@
 import hashlib
 
+from django.contrib import messages
+from django.contrib.auth import login
 from django.contrib.auth.mixins import LoginRequiredMixin
 from django.contrib.auth.views import LoginView
 from django.core.cache import cache
 from django.http import HttpResponse
 from django.shortcuts import redirect
 from django.urls import reverse_lazy
-from django.views.generic import CreateView, TemplateView
+from django.views.generic import CreateView, TemplateView, UpdateView
 
-from accounts.forms import SignUpForm
+from accounts.forms import ProfileForm, SignUpForm
 
 
 class AnonymousRequiredMixin:
     def dispatch(self, request, *args, **kwargs):
         if request.user.is_authenticated:
-            return redirect("accounts:profile")
+            return redirect("catalog:list")
         return super().dispatch(request, *args, **kwargs)
 
 
 class SignUpView(AnonymousRequiredMixin, CreateView):
     form_class = SignUpForm
-    success_url = reverse_lazy("login")
+    success_url = reverse_lazy("home")
     template_name = "accounts/signup.html"
+
+    def form_valid(self, form):
+        response = super().form_valid(form)
+        login(self.request, self.object, backend="django.contrib.auth.backends.ModelBackend")
+        messages.success(self.request, f"Welcome to HomeBites, {self.object.get_username()}. Your account is ready and you are signed in.")
+        return response
 
 
 class HomeBitesLoginView(LoginView):
@@ -57,6 +65,21 @@ class HomeBitesLoginView(LoginView):
         return super().form_valid(form)
 
 
-class ProfileView(LoginRequiredMixin, TemplateView):
+class ProfileView(LoginRequiredMixin, UpdateView):
+    form_class = ProfileForm
     template_name = "accounts/profile.html"
+    success_url = reverse_lazy("accounts:profile")
+
+    def get_object(self, queryset=None):
+        return self.request.user
+
+    def get_context_data(self, **kwargs):
+        context = super().get_context_data(**kwargs)
+        from sellers.models import SellerProfile
+        context["seller"] = SellerProfile.objects.filter(user=self.request.user).first()
+        return context
+
+    def form_valid(self, form):
+        messages.success(self.request, "Your details were saved.")
+        return super().form_valid(form)
 

@@ -66,6 +66,38 @@ class DiscoveryTests(TestCase):
                 response = self.client.get(reverse("catalog:list"), {"q": query})
                 self.assertEqual(response.context["page_obj"].paginator.count, expected)
 
+    def test_published_is_not_claimed_as_orderable_without_a_schedule(self):
+        response = self.client.get(reverse("catalog:list"))
+        self.assertContains(response, "Food offers")
+        self.assertNotContains(response, "Available offers")
+        detail = self.client.get(reverse("catalog:detail", args=[self.pad_thai.pk]))
+        self.assertContains(detail, "No schedule published")
+        self.assertContains(detail, "Explore other food")
+
+    def test_detail_explains_window_cutoff_and_remaining_portions(self):
+        start = timezone.now() + timedelta(hours=1)
+        slot = FulfillmentSlot.objects.create(seller=self.seller, order_type="standard", starts_at=start, ends_at=start + timedelta(hours=2))
+        ListingStock.objects.create(listing=self.pad_thai, slot=slot, capacity=5, held=2)
+        response = self.client.get(reverse("catalog:detail", args=[self.pad_thai.pk]))
+        self.assertContains(response, "Choose a fulfillment window")
+        self.assertContains(response, "Bangkok time")
+        self.assertContains(response, "3 portions left")
+        self.assertContains(response, "30 minutes")
+
+    def test_malformed_cart_review_reference_does_not_break_food_details(self):
+        self.client.force_login(self.seller.user)
+        for value in ("²", "not-an-id", "9" * 5000):
+            response = self.client.get(reverse("catalog:detail", args=[self.pad_thai.pk]), {"review_cart_item": value})
+            self.assertEqual(response.status_code, 200)
+
+    def test_availability_is_loaded_in_bulk_for_a_catalogue_page(self):
+        from django.db import connection
+        from django.test.utils import CaptureQueriesContext
+        with CaptureQueriesContext(connection) as queries:
+            response = self.client.get(reverse("catalog:list"))
+        self.assertEqual(response.status_code, 200)
+        self.assertLessEqual(len(queries), 6)
+
     def test_country_and_price_filters_combine(self):
         response = self.client.get(reverse("catalog:list"), {
             "country": "TH", "min_price": "100", "max_price": "130",
@@ -82,6 +114,14 @@ class DiscoveryTests(TestCase):
         self.assertEqual(response.context["page_obj"].paginator.count, 1)
         self.assertContains(response, "Second Kitchen")
         self.assertNotContains(response, "Bangkok Family Kitchen")
+
+    def test_halal_filter_lists_only_halal_declared_offers_and_offers_the_choice(self):
+        self.second_pad_thai.dietary_tags = ["halal"]
+        self.second_pad_thai.save(update_fields=["dietary_tags"])
+        response = self.client.get(reverse("catalog:list"), {"dietary": "halal"})
+        self.assertEqual(response.context["page_obj"].paginator.count, 1)
+        self.assertContains(response, "Second Kitchen")
+        self.assertContains(response, 'value="halal"')
 
     def test_invalid_price_does_not_crash_listing(self):
         response = self.client.get(reverse("catalog:list"), {"min_price": "bad", "max_price": "-5"})
@@ -115,6 +155,30 @@ class DiscoveryTests(TestCase):
         detail = self.client.get(reverse("catalog:detail", args=[self.pad_thai.pk]))
         self.assertContains(card, "listing_images/pad-thai.jpg")
         self.assertContains(detail, "listing_images/pad-thai.jpg")
+
+    def test_offer_without_seller_photo_uses_credited_catalogue_photo(self):
+        card = self.client.get(reverse("catalog:list"))
+        detail = self.client.get(reverse("catalog:detail", args=[self.pad_thai.pk]))
+        self.assertContains(card, "/static/catalog/food/real/TH01-pad-thai.jpg")
+        self.assertContains(detail, "/static/catalog/food/real/TH01-pad-thai.jpg")
+        self.assertNotContains(detail, "AI-generated illustration of Pad Thai")
+
+    def test_dietary_offer_uses_vegetarian_illustrative_image(self):
+        self.pad_thai.dietary_tags = ["vegetarian"]
+        self.pad_thai.save(update_fields=["dietary_tags"])
+        response = self.client.get(reverse("catalog:detail", args=[self.pad_thai.pk]))
+        self.assertContains(response, "/static/catalog/food/pad-thai-vegetarian.webp")
+
+    def test_vegan_offer_never_uses_egg_pad_thai_fallback(self):
+        self.pad_thai.ingredients = ["rice noodles", "tofu", "bean sprouts"]
+        self.pad_thai.save()
+        self.pad_thai.ingredients_reviewed = True
+        self.pad_thai.status = "published"
+        self.pad_thai.dietary_tags = ["vegetarian", "vegan"]
+        self.pad_thai.save()
+        response = self.client.get(reverse("catalog:detail", args=[self.pad_thai.pk]))
+        self.assertNotContains(response, "/static/catalog/food/pad-thai-vegetarian.webp")
+        self.assertContains(response, "/static/catalog/food/thailand-vegetarian.webp")
 
     def test_availability_requires_open_slot_with_remaining_portions(self):
         start = timezone.now() + timedelta(hours=2)

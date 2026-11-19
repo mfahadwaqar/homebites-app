@@ -6,14 +6,16 @@
 <div class="seller-page">
 <h1>Fulfillment slots</h1>
 <p>All times are in Bangkok time. Pre-order deadlines must be before fulfillment starts.</p>
+<p>Standard ordering closes 30 minutes before a window ends, allowing preparation. Each dish needs its own capacity for each window. Pausing a window stops new bookings without moving existing orders.</p>
 <a href="{% url 'sellers:slot_create' %}">Create a slot</a>
 {% for slot in slots %}
   <section class="seller-form-page seller-section">
     <h2>{{ slot.get_order_type_display }} · {{ slot.starts_at|date:"j M Y, H:i" }}–{{ slot.ends_at|date:"H:i" }}</h2>
-    <p>{% if slot.is_active %}Active{% else %}Inactive{% endif %} · {% if slot.allows_pickup %}Pickup{% endif %} {% if slot.allows_delivery %}Simulated delivery{% endif %}</p>
-    {% if slot.preorder_deadline %}<p>Order deadline: {{ slot.preorder_deadline|date:"j M Y, H:i" }}</p>{% endif %}
+    <p>{% if slot.is_active %}Active{% else %}Inactive{% endif %} · {% if slot.allows_pickup %}Pickup{% endif %} {% if slot.allows_delivery %}Delivery{% endif %}</p>
+    <p>Booking cutoff: {{ slot.booking_cutoff|date:"j M Y, H:i" }} Bangkok time. {% if slot.booking_problem %}{{ slot.booking_problem }}{% else %}Booking window open; check portions below.{% endif %}</p>
     <a href="{% url 'sellers:slot_edit' slot.pk %}">Edit slot</a>
     <h3>Portions by offer</h3>
+    <ul>{% for stock in slot.stocks.all %}<li>{{ stock.listing.dish.name }}: {{ stock.available }} left of {{ stock.capacity }} · {{ stock.held }} held for payment · {{ stock.committed }} committed.</li>{% empty %}<li>No portions set. Add capacity below before buyers can order.</li>{% endfor %}</ul>
     <ul>{% for listing in listings %}
       <li>{{ listing.dish.name }} · <a href="{% url 'sellers:stock_set' slot.pk listing.pk %}">Set capacity</a></li>
     {% empty %}<li>Create an offer before setting portions.</li>{% endfor %}</ul>

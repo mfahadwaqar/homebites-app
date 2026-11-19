@@ -4,12 +4,12 @@
 {% block extra_styles %}<link rel="stylesheet" href="{% static 'orders/workflow.css' %}">{% endblock %}
 {% block content %}
 <div class="workflow-page">
-  <header class="workflow-heading"><p class="workflow-eyebrow">Seller workspace</p><h1>Orders to manage</h1><p>Pickup and delivery progress shown here is simulated.</p></header>
+  <header class="workflow-heading"><p class="workflow-eyebrow">Seller workspace</p><h1>Orders to manage</h1><p>Update each order as it moves from preparation to handoff.</p></header>
   {% if seller %}
     <ul class="workflow-list">
       {% for order in orders %}
         <li class="workflow-card">
-          <div><span class="workflow-status">{{ order.get_status_display }}</span><h2><a href="{% url 'orders_workflow:detail' order.pk %}">Order #{{ order.pk }}</a></h2><p>{{ order.get_fulfillment_method_display }} · {{ order.slot.starts_at|date:"j M Y, H:i" }}–{{ order.slot.ends_at|date:"H:i" }} Bangkok time</p></div>
+          <div><span class="workflow-status">{{ order.display_status }}</span><h2><a href="{% url 'orders_workflow:detail' order.pk %}">Order #{{ order.pk }}</a></h2><p>{{ order.get_fulfillment_method_display }} · {{ order.slot.starts_at|date:"j M Y, H:i" }}–{{ order.slot.ends_at|date:"H:i" }} Bangkok time</p></div>
           <a class="workflow-open" href="{% url 'orders_workflow:detail' order.pk %}">View order <span aria-hidden="true">→</span></a>
         </li>
       {% empty %}<li class="workflow-card workflow-empty">No orders yet for {{ seller.storefront_name }}.</li>{% endfor %}

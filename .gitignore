@@ -14,3 +14,7 @@ staticfiles/
 .DS_Store
 Thumbs.db
 
+
+.pgdata/
+.demo-credentials.txt
+imgs/

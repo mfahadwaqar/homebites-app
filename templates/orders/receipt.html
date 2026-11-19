@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}Receipt for order #{{ order.pk }} | HomeBites{% endblock %}
+{% block content %}
+<section class="receipt-page">
+  <p class="receipt-actions"><a href="{% url 'orders:detail' order.pk %}">← Back to order</a> <button type="button" onclick="window.print()">Print receipt</button></p>
+  <article class="receipt" aria-labelledby="receipt-title">
+    <header class="receipt__head">
+      <p class="receipt__brand">HomeBites</p>
+      <h1 id="receipt-title">Receipt, order #{{ order.pk }}</h1>
+      <p class="receipt__demo">Payment receipt. Not a tax invoice.</p>
+    </header>
+    <dl class="receipt__meta">
+      <div><dt>Date</dt><dd>{{ order.created_at|date:"j M Y, g:i A" }} Bangkok time</dd></div>
+      <div><dt>Kitchen</dt><dd>{{ order.seller.storefront_name }}</dd></div>
+      <div><dt>Fulfilment</dt><dd>{{ order.get_fulfillment_method_display }}{% if order.origin_snapshot %} from {{ order.origin_snapshot }}{% endif %}{% if order.destination_snapshot %} to {{ order.destination_snapshot }}{% endif %}</dd></div>
+      <div><dt>Window</dt><dd>{{ order.slot.get_order_type_display }}, {{ order.slot.starts_at|date:"j M Y, g:i A" }} to {{ order.slot.ends_at|date:"g:i A" }}</dd></div>
+      <div><dt>Payment</dt><dd>{{ order.get_payment_method_display }}: {{ presentation.payment_label }}</dd></div>
+      <div><dt>Order status</dt><dd>{{ order.display_status }}</dd></div>
+      {% if reference %}<div><dt>Reference</dt><dd>{{ reference }}</dd></div>{% endif %}
+    </dl>
+    <table class="receipt__items">
+      <thead><tr><th scope="col">Dish</th><th scope="col">Qty</th><th scope="col">Price</th><th scope="col">Total</th></tr></thead>
+      <tbody>
+        {% for item in items %}
+          <tr><td><strong>{{ item.dish_name_snapshot }}</strong><br><small>{{ item.ingredients_snapshot|join:", " }}</small></td><td>{{ item.quantity }}</td><td>฿{{ item.unit_price }}</td><td>฿{{ item.line_total }}</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    <dl class="order-totals receipt__totals">
+      <div><dt>Food</dt><dd>฿{{ order.food_subtotal }}</dd></div>
+      <div><dt>Delivery</dt><dd>฿{{ order.delivery_fee }}</dd></div>
+      <div class="order-totals__total"><dt>Total</dt><dd>฿{{ order.customer_total }}</dd></div>
+    </dl>
+    <p class="receipt__foot">The 10% platform commission is deducted from seller food earnings. It is not added to your bill. Ingredients are the seller's list at the time of the order.</p>
+  </article>
+</section>
+{% endblock %}

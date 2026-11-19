@@ -1,0 +1,20 @@
+{% extends 'base.html' %}
+{% block title %}Review cart replacement | HomeBites{% endblock %}
+{% block content %}
+<section class="order-page"><h1>Replace your cart?</h1>
+  <p>{{ reason }}</p>
+  <p>Each order comes from one kitchen in one fulfillment window, so ingredients, portions and handoff stay together.</p>
+  <div class="order-card"><h2>Current cart</h2><p>{{ cart.seller.storefront_name }} · {{ cart.slot.starts_at|date:'j M Y, g:i A' }} Bangkok time</p>
+    <ul>{% for item in cart.items.all %}<li>{{ item.listing.dish.name }} × {{ item.quantity }}</li>{% endfor %}</ul>
+  </div>
+  <div class="order-card"><h2>Proposed replacement</h2><p>{{ listing.seller.storefront_name }} · {{ listing.dish.name }} × {{ quantity }} · {{ slot.starts_at|date:'j M Y, g:i A' }} Bangkok time</p>
+    <p>฿{{ listing.price }} per portion. Current ingredients: {{ listing.ingredients|join:', ' }}.</p>
+    <p>Replacing removes the current cart items and clears its delivery estimate. No placed orders are affected.</p>
+    <form method="post" action="{% url 'orders:add' listing.pk %}">{% csrf_token %}
+      <input type="hidden" name="replace" value="yes"><input type="hidden" name="expected_revision" value="{{ cart.revision }}">
+      <input type="hidden" name="slot" value="{{ slot.pk }}"><input type="hidden" name="quantity" value="{{ quantity }}">
+      <button type="submit">Replace cart with this dish</button>
+    </form><p><a href="{% url 'orders:cart' %}">Keep my current cart</a></p>
+  </div>
+</section>
+{% endblock %}

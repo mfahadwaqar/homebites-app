@@ -1,16 +1,49 @@
 {% extends "base.html" %}
-
-{% block title %}HomeBites — Homemade food marketplace demo{% endblock %}
+{% load static %}
+{% block title %}HomeBites | Food from home kitchens across Bangkok{% endblock %}
+{% block extra_styles %}<link rel="preload" as="image" href="{% static 'catalog/food/real/TH01-pad-thai.jpg' %}" fetchpriority="high">{% endblock %}
 
 {% block content %}
-<section class="intro" aria-labelledby="home-title">
-  <p class="intro__label">Bangkok-wide simulated marketplace</p>
-  <h1 id="home-title">Discover independent food through HomeBites.</h1>
-  <p class="intro__summary">
-    HomeBites is a university demonstration of a marketplace for homemade and
-    independent food. Payments, delivery and location calculations will be simulated.
-  </p>
-  <p class="intro__status">Foundation milestone complete.</p>
-</section>
-{% endblock %}
+<div class="landing">
+  <section class="landing-hero" aria-labelledby="home-title">
+    <div class="landing-hero__text">
+      <h1 id="home-title">A taste of home, from kitchens across Bangkok.</h1>
+      <p>Order homemade Thai, Pakistani, Bangladeshi, Nepali and Indian meals from independent cooks near you.</p>
+      <form class="hero-search hero-search--light" method="get" action="{% url 'catalog:list' %}" role="search">
+        <label class="sr-only" for="hero-q">Search dishes or kitchens</label>
+        <input id="hero-q" type="search" name="q" placeholder="Search dishes or kitchens">
+        <button type="submit">Find food</button>
+      </form>
+      <p class="landing-hero__links"><a href="{% url 'catalog:list' %}">Browse all food</a> <span aria-hidden="true">·</span> <a href="{% url 'sellers:apply' %}">Sell from your kitchen</a></p>
+    </div>
+    <div class="mosaic" aria-hidden="true">
+      <img class="m1" src="{% static 'catalog/food/real/TH01-pad-thai.jpg' %}" alt="" width="900" height="600" fetchpriority="high">
+      <img class="m2" src="{% static 'catalog/food/real/PK04-chicken-karahi.jpg' %}" alt="" width="900" height="600">
+      <img class="m3" src="{% static 'catalog/food/real/BD03-shorshe-ilish.jpg' %}" alt="" width="900" height="600">
+      <img class="m4" src="{% static 'catalog/food/real/NP01-chicken-momo.jpg' %}" alt="" width="900" height="600">
+      <img class="m5" src="{% static 'catalog/food/real/IN01-butter-chicken.jpg' %}" alt="" width="900" height="600">
+      <img class="m6" src="{% static 'catalog/food/real/PK01-chicken-biryani.jpg' %}" alt="" width="900" height="600">
+      <img class="m7" src="{% static 'catalog/food/real/IN10-gulab-jamun.jpg' %}" alt="" width="900" height="600">
+    </div>
+  </section>
 
+  {% for band in bands %}
+    <section class="band band--{{ band.code|lower }}" aria-labelledby="band-{{ band.code|lower }}">
+      <div class="band__photo"><img src="{% static band.image %}" alt="" loading="{% if forloop.first %}eager{% else %}lazy{% endif %}" decoding="async" width="1200" height="800"></div>
+      <div class="band__text">
+        <h2 id="band-{{ band.code|lower }}">{{ band.name }}</h2>
+        <p>{{ band.line }}</p>
+        <ul>{% for listing in band.listings %}<li><a href="{% url 'catalog:detail' listing.pk %}">{{ listing.dish.name }}</a></li>{% endfor %}</ul>
+        <a class="primary-link" href="{% url 'catalog:list' %}?country={{ band.code }}">See {{ band.name }} dishes</a>
+      </div>
+    </section>
+  {% endfor %}
+
+  <section class="points" aria-label="How HomeBites works">
+    <div><h3>Ingredients up front</h3><p>Every dish lists the cook's own ingredients and a calorie estimate.</p></div>
+    <div><h3>Pickup or delivery</h3><p>Pickup is free. Delivery is priced by distance.</p></div>
+    <div><h3>Pre-orders</h3><p>Order ahead for a later window.</p></div>
+    <div><h3>Sell your cooking</h3><p>Apply to open a home kitchen.</p></div>
+  </section>
+</div>
+{% endblock %}

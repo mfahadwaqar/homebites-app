@@ -10,7 +10,7 @@ class SignUpTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertContains(response, "Create your HomeBites account")
 
-    def test_valid_signup_creates_user_and_redirects_to_login(self):
+    def test_valid_signup_creates_user_signs_them_in_and_shows_their_name(self):
         response = self.client.post(
             reverse("accounts:signup"),
             {
@@ -22,7 +22,11 @@ class SignUpTests(TestCase):
             },
         )
 
-        self.assertRedirects(response, reverse("login"), fetch_redirect_response=False)
+        self.assertRedirects(response, reverse("home"), fetch_redirect_response=False)
+        self.assertIn("_auth_user_id", self.client.session)
+        page = self.client.get(reverse("home"))
+        self.assertContains(page, "Welcome to HomeBites, maya")
+        self.assertContains(page, "Signed in as maya")
         user = get_user_model().objects.get(username="maya")
         self.assertEqual(user.email, "maya@example.test")
         self.assertEqual(user.display_name, "Maya Rahman")
@@ -70,7 +74,7 @@ class SignUpTests(TestCase):
 
         self.assertRedirects(
             response,
-            reverse("accounts:profile"),
+            reverse("catalog:list"),
             fetch_redirect_response=False,
         )
         self.assertEqual(user_model.objects.count(), 1)

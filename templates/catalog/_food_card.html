@@ -1,0 +1,18 @@
+{% load static %}
+<article class="catalog-card">
+  <a class="catalog-card__art" href="{% url 'catalog:detail' listing.pk %}" aria-label="View {{ listing.dish.name }} from {{ listing.seller.storefront_name }}">
+    {% if listing.image %}<img src="{{ listing.image.url }}" alt="" loading="lazy" decoding="async" width="640" height="420">{% else %}<img src="{% static listing.illustrative_image %}" alt="" loading="lazy" decoding="async" width="640" height="420">{% endif %}
+  </a>
+  <div class="catalog-card__body">
+    <p class="catalog-card__country">{{ listing.dish.country.name }}</p>
+    <h3><a href="{% url 'catalog:detail' listing.pk %}">{{ listing.dish.name }}</a></h3>
+    {% if listing.rating_count %}<p class="catalog-card__rating"><strong>{{ listing.rating_avg|floatformat:1 }}</strong> <span>out of 5 · {{ listing.rating_count }} review{{ listing.rating_count|pluralize }}</span></p>{% endif %}
+    <p class="catalog-card__description">{{ listing.description|default:listing.dish.description|truncatechars:90 }}</p>
+    <p class="chip-row">{% if listing.has_nutrition %}<span class="chip chip--kcal" title="Estimated, per {{ listing.serving_size }}">Estimated {{ listing.calories_kcal }} kcal</span><span class="chip">{{ listing.serving_size }}</span>{% endif %}{% for tag in listing.dietary_tags %}<span class="chip chip--diet">{{ tag|capfirst }}</span>{% endfor %}</p>
+    {% include 'catalog/_availability.html' %}
+    <div class="catalog-card__footer">
+      {% if storefront %}<a href="{% url 'catalog:detail' listing.pk %}">View dish <span aria-hidden="true">↗</span></a>{% else %}<a href="{% url 'sellers:storefront' listing.seller.pk %}">{{ listing.seller.storefront_name }}</a>{% endif %}
+      <strong>฿{{ listing.price }}</strong>
+    </div>
+  </div>
+</article>

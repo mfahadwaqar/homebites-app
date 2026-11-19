@@ -7,6 +7,7 @@ from django.utils import timezone
 
 from orders.models import InventoryReservation, ListingStock, Order
 from payments.models import PaymentAttempt
+from orders.availability import window_problem
 
 
 ONLINE_METHODS = {Order.PaymentMethod.MOCK_PROMPTPAY, Order.PaymentMethod.MOCK_CARD}
@@ -25,17 +26,14 @@ def _order_id(order):
     return order.pk if isinstance(order, Order) else order
 
 
-def _active_hold(order, now):
+def _active_hold(order, now, *, check_window=True):
     if order.status != Order.Status.PENDING_PAYMENT:
-        raise PaymentConflict("This order is not waiting for a mock payment.")
+        raise PaymentConflict("This order is not waiting for a payment.")
     if order.hold_expires_at is None or order.hold_expires_at <= now:
         raise PaymentConflict("The payment hold has expired. Start a new checkout.")
-    if not order.slot.is_active or order.slot.ends_at <= now:
-        raise PaymentConflict("The fulfillment window has ended.")
-    if order.slot.order_type == order.slot.OrderType.PREORDER and (
-        order.slot.preorder_deadline is None or order.slot.preorder_deadline <= now
-    ):
-        raise PaymentConflict("The pre-order deadline has passed.")
+    problem = window_problem(order.slot, at=now) if check_window else None
+    if problem:
+        raise PaymentConflict(problem)
     reservations = list(
         InventoryReservation.objects.filter(item__order=order).order_by("stock_id", "pk")
     )
@@ -63,7 +61,7 @@ def create_payment_attempt(buyer, order, *, idempotency_key, now=None):
         order=locked, method=locked.payment_method, amount=locked.customer_total,
         idempotency_key=idempotency_key, state=PaymentAttempt.State.PENDING,
     )
-    attempt.mock_reference = f"DEMO-ORDER-{locked.pk:06d}-{attempt.pk:04d}"
+    attempt.mock_reference = f"HB-ORDER-{locked.pk:06d}-{attempt.pk:04d}"
     attempt.save(update_fields=["mock_reference"])
     return attempt
 
@@ -73,7 +71,7 @@ def create_cash_payment_record(order):
     """Record cash due without implying that any money has changed hands."""
     locked = Order.objects.select_for_update().get(pk=_order_id(order))
     if locked.payment_method not in CASH_METHODS or locked.status in TERMINAL_ORDERS:
-        raise PaymentConflict("This order cannot use simulated cash collection.")
+        raise PaymentConflict("This order cannot use cash collection.")
     attempt = PaymentAttempt.objects.filter(order=locked, idempotency_key="cash-due").first()
     if attempt:
         return attempt
@@ -83,7 +81,7 @@ def create_cash_payment_record(order):
         order=locked, method=locked.payment_method, amount=locked.customer_total,
         idempotency_key="cash-due", state=PaymentAttempt.State.CASH_DUE,
     )
-    attempt.mock_reference = f"DEMO-CASH-{locked.pk:06d}-{attempt.pk:04d}"
+    attempt.mock_reference = f"HB-CASH-{locked.pk:06d}-{attempt.pk:04d}"
     attempt.save(update_fields=["mock_reference"])
     return attempt
 
@@ -114,14 +112,14 @@ def _move_reservations(order, *, success):
 def resolve_mock_payment(buyer, attempt, *, outcome, expected_amount, now=None):
     """Apply a fake result exactly once; a late or contradictory result is rejected."""
     if outcome not in {"pending", "succeeded", "failed"}:
-        raise PaymentConflict("Choose a supported mock result.")
+        raise PaymentConflict("Choose a supported payment result.")
     order_id = attempt.order_id if isinstance(attempt, PaymentAttempt) else PaymentAttempt.objects.only("order_id").get(pk=attempt).order_id
     order = Order.objects.select_for_update().get(pk=order_id)
     locked = PaymentAttempt.objects.select_for_update().get(pk=attempt.pk if isinstance(attempt, PaymentAttempt) else attempt)
     if order.buyer_id != getattr(buyer, "pk", None) or locked.order_id != order.pk:
         raise PaymentConflict("This is not your payment attempt.")
     if locked.method not in ONLINE_METHODS:
-        raise PaymentConflict("Cash orders do not use the mock payment screen.")
+        raise PaymentConflict("Cash orders do not use the payment screen.")
     try:
         submitted_amount = Decimal(str(expected_amount))
     except (InvalidOperation, ValueError):
@@ -134,7 +132,7 @@ def resolve_mock_payment(buyer, attempt, *, outcome, expected_amount, now=None):
         raise PaymentConflict("This payment result was already finalized differently.")
     if locked.state != PaymentAttempt.State.PENDING:
         raise PaymentConflict("This payment is not pending.")
-    _active_hold(order, now or timezone.now())
+    _active_hold(order, now or timezone.now(), check_window=False)
     if outcome == "pending":
         return locked
     _move_reservations(order, success=outcome == "succeeded")
@@ -146,7 +144,7 @@ def resolve_mock_payment(buyer, attempt, *, outcome, expected_amount, now=None):
     locked.save(update_fields=["state", "resolved_at"])
     from orders.services.workflow import record_order_event
 
-    note = "Simulated payment succeeded; awaiting seller." if outcome == "succeeded" else "Simulated payment failed; stock released."
+    note = "Payment received; awaiting seller." if outcome == "succeeded" else "Payment failed; stock released."
     record_order_event(order, previous_status, actor=buyer, note=note)
     return locked
 
@@ -157,7 +155,9 @@ def record_cash_collection(actor, order):
     locked = Order.objects.select_for_update().get(pk=_order_id(order))
     if getattr(actor, "pk", None) != locked.seller.user_id and not getattr(actor, "is_staff", False):
         raise PaymentConflict("Only the seller or staff can record collection.")
-    if locked.payment_method not in CASH_METHODS or locked.status != Order.Status.CONFIRMED:
+    collectable = (Order.Status.CONFIRMED, Order.Status.PREPARING, Order.Status.READY,
+                   Order.Status.OUT_FOR_DELIVERY, Order.Status.DELIVERED)
+    if locked.payment_method not in CASH_METHODS or locked.status not in collectable:
         raise PaymentConflict("Cash can only be collected for a confirmed cash order.")
     attempt = PaymentAttempt.objects.select_for_update().filter(order=locked).first()
     if attempt is None:
@@ -214,7 +214,7 @@ def simulate_refund(order):
     if attempt.state == PaymentAttempt.State.SIMULATED_REFUNDED:
         return attempt
     if attempt.state != PaymentAttempt.State.SUCCEEDED:
-        raise PaymentConflict("This mock payment was not successful.")
+        raise PaymentConflict("This payment was not successful.")
     attempt.state = PaymentAttempt.State.SIMULATED_REFUNDED
     attempt.resolved_at = timezone.now()
     attempt.save(update_fields=["state", "resolved_at"])

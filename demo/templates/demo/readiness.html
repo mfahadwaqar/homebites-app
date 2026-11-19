@@ -1,0 +1,14 @@
+{% extends 'base.html' %}
+{% block title %}Demo readiness | HomeBites{% endblock %}
+{% block content %}
+<section class="order-page"><h1>Demo readiness</h1>
+  <p>{{ now|date:'j M Y, g:i A' }} Bangkok time · {{ orderable_count }} published offers accepting orders · {{ marker_count }} of 10 expected marked demo windows.</p>
+  <p>Refreshing renews expired marked schedules and releases overdue payment holds. Current stock, deliberate pauses, historical orders and passwords are preserved. Sold-out windows are not replenished.</p>
+  <form method="post" action="{% url 'demo:refresh' %}">{% csrf_token %}<button type="submit">Refresh expired demo windows</button></form>
+  {% for row in rows %}<article class="order-card"><h2>{{ row.marker.seller.storefront_name }} · {{ row.marker.slot.get_order_type_display }}</h2>
+    <p>{{ row.message }}</p><p>{{ row.marker.slot.starts_at|date:'j M Y, g:i A' }} – {{ row.marker.slot.ends_at|date:'j M Y, g:i A' }} Bangkok time. Booking cutoff: {{ row.cutoff|date:'j M Y, g:i A' }}. {{ row.stock_count }} original dish-stock associations.</p>
+  </article>{% empty %}<p>No marked demo schedules exist. Run <code>manage.py seed_demo</code> for initial setup.</p>{% endfor %}
+  <p>Seeded seller identities cannot sign in. Create and approve a separate fictional seller to demonstrate seller actions.</p>
+  <p><a href="/reviews/moderation/">Review moderation</a> · <a href="/admin/">Administration</a> · <a href="{% url 'catalog:list' %}?available=1">Food accepting orders</a></p>
+</section>
+{% endblock %}

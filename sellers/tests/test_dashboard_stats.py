@@ -8,6 +8,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from catalog.models import FoodListing
+from orders.tests.helpers import finish_order
 from orders.models import FulfillmentSlot, ListingStock, Order
 from orders.services.cart import add_to_cart
 from orders.services.checkout import checkout
@@ -33,7 +34,7 @@ class SellerDashboardStatsTests(TestCase):
         add_to_cart(self.buyer, self.listing, self.slot, 1)
         completed = checkout(self.buyer, idempotency_key="stats-one", payment_method=Order.PaymentMethod.CASH_PICKUP)
         accept_order(self.listing.seller.user, completed.pk)
-        complete_handoff(self.listing.seller.user, completed.pk)
+        finish_order(self.listing.seller.user, completed.pk)
         add_to_cart(self.buyer, self.listing, self.slot, 1)
         checkout(self.buyer, idempotency_key="stats-two", payment_method=Order.PaymentMethod.CASH_PICKUP)
 
@@ -44,3 +45,13 @@ class SellerDashboardStatsTests(TestCase):
         self.assertEqual(response.context["commission_total"], completed.commission)
         self.assertEqual(response.context["seller_earnings"], completed.seller_food_earnings)
         self.assertEqual(completed.commission, (completed.food_subtotal * Decimal("0.10")).quantize(Decimal("0.01")))
+
+    def test_completed_flag_without_settled_payment_does_not_inflate_sales(self):
+        add_to_cart(self.buyer, self.listing, self.slot, 1)
+        order = checkout(self.buyer, idempotency_key="unsettled-completed", payment_method=Order.PaymentMethod.CASH_PICKUP)
+        Order.objects.filter(pk=order.pk).update(status=Order.Status.COMPLETED)
+        self.client.force_login(self.listing.seller.user)
+        response = self.client.get(reverse("sellers:dashboard"))
+        self.assertEqual(response.context["completed_orders"], 0)
+        self.assertContains(response, "Kitchen setup")
+        self.assertContains(response, "Portions available")

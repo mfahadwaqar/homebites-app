@@ -7,6 +7,7 @@ from django.urls import include, path, reverse
 from django.utils import timezone
 
 from catalog.models import FoodListing
+from orders.tests.helpers import finish_order
 from orders.models import Cart, FulfillmentSlot, InventoryReservation, ListingStock, Order
 from orders.services.cart import add_to_cart, select_fulfillment
 from orders.services.checkout import checkout
@@ -70,9 +71,9 @@ class SellerWorkflowTests(TestCase):
         accepted = accept_order(self.owner, self.order.pk)
         self.assertEqual(accepted.status, Order.Status.CONFIRMED)
         self.assertEqual(accept_order(self.owner, self.order.pk).status, Order.Status.CONFIRMED)
-        completed = complete_handoff(self.owner, self.order.pk)
+        completed = finish_order(self.owner, self.order.pk)
         self.assertEqual(completed.status, Order.Status.COMPLETED)
-        self.assertEqual(complete_handoff(self.owner, self.order.pk).status, Order.Status.COMPLETED)
+        self.assertEqual(finish_order(self.owner, self.order.pk).status, Order.Status.COMPLETED)
         item.refresh_from_db()
         self.assertEqual((item.dish_name_snapshot, item.ingredients_snapshot, item.unit_price), original)
         self.stock.refresh_from_db()
@@ -86,7 +87,7 @@ class SellerWorkflowTests(TestCase):
         from orders.services.workflow import WorkflowError, complete_handoff
 
         with self.assertRaises(WorkflowError):
-            complete_handoff(self.owner, self.order.pk)
+            finish_order(self.owner, self.order.pk)
         self.order.refresh_from_db()
         self.assertEqual(self.order.status, Order.Status.CASH_DUE)
 
@@ -131,11 +132,11 @@ class SellerWorkflowTests(TestCase):
         from orders.services.workflow import accept_order, complete_handoff
 
         accept_order(self.owner, self.order.pk)
-        complete_handoff(self.owner, self.order.pk)
+        finish_order(self.owner, self.order.pk)
         self.client.force_login(self.buyer)
         response = self.client.get(reverse("orders:detail", args=[self.order.pk]))
         self.assertContains(response, "Order timeline")
-        self.assertContains(response, "Simulated pickup handoff")
+        self.assertContains(response, "Pickup handoff recorded")
 
     def test_delivery_handoff_collects_simulated_cash_and_preserves_destination(self):
         from orders.services.workflow import accept_order, complete_handoff
@@ -158,12 +159,12 @@ class SellerWorkflowTests(TestCase):
         delivery.refresh_from_db()
         self.assertEqual(delivery.origin_snapshot, "Ari")
         accept_order(self.owner, delivery.pk)
-        complete_handoff(self.owner, delivery.pk)
+        finish_order(self.owner, delivery.pk)
         delivery.refresh_from_db()
         self.assertEqual(delivery.status, Order.Status.COMPLETED)
         self.assertEqual(delivery.destination_snapshot, "Asok")
         self.assertEqual(delivery.payment_attempts.get().state, PaymentAttempt.State.CASH_COLLECTED)
-        self.assertIn("delivery handoff", delivery.events.last().note)
+        self.assertIn("Delivery handoff", delivery.events.last().note)
 
     def test_order_queue_and_detail_hide_other_sellers_orders(self):
         self.client.force_login(self.outsider)
@@ -196,3 +197,46 @@ class SellerWorkflowTests(TestCase):
         self.assertRedirects(response, reverse("orders_workflow:detail", args=[self.order.pk]))
         self.order.refresh_from_db()
         self.assertEqual(self.order.status, Order.Status.CONFIRMED)
+
+
+class StatusChainTests(SellerWorkflowTests):
+    """Proposal 4.6: Confirmed, Preparing, Ready, Out for delivery, Delivered, Completed."""
+
+    def test_pickup_order_follows_confirmed_preparing_ready_completed(self):
+        from orders.services.workflow import WorkflowError, accept_order, advance_order, complete_handoff
+        accept_order(self.owner, self.order.pk)
+        with self.assertRaises(WorkflowError):
+            complete_handoff(self.owner, self.order.pk)
+        seen = [advance_order(self.owner, self.order.pk).status, advance_order(self.owner, self.order.pk).status]
+        self.assertEqual(seen, [Order.Status.PREPARING, Order.Status.READY])
+        self.order.refresh_from_db()
+        self.assertEqual(self.order.display_status, "Ready for pickup")
+        with self.assertRaises(WorkflowError):
+            advance_order(self.owner, self.order.pk)
+        self.assertEqual(complete_handoff(self.owner, self.order.pk).status, Order.Status.COMPLETED)
+
+    def test_only_the_owning_seller_can_advance(self):
+        from orders.services.workflow import WorkflowError, accept_order, advance_order
+        accept_order(self.owner, self.order.pk)
+        with self.assertRaises(WorkflowError):
+            advance_order(self.outsider, self.order.pk)
+
+    def test_seller_page_shows_the_next_step_button(self):
+        from orders.services.workflow import accept_order
+        accept_order(self.owner, self.order.pk)
+        self.client.force_login(self.owner)
+        page = self.client.get(reverse("orders_workflow:detail", args=[self.order.pk]))
+        self.assertContains(page, "Start preparing")
+        self.client.post(reverse("orders_workflow:advance", args=[self.order.pk]))
+        page = self.client.get(reverse("orders_workflow:detail", args=[self.order.pk]))
+        self.assertContains(page, "Mark ready for pickup")
+
+    def test_buyer_sees_every_step_on_their_order_page(self):
+        from orders.services.workflow import accept_order, advance_order
+        accept_order(self.owner, self.order.pk)
+        advance_order(self.owner, self.order.pk)
+        self.client.force_login(self.order.buyer)
+        page = self.client.get(reverse("orders:detail", args=[self.order.pk]))
+        for label in ("Seller confirms", "Preparing", "Ready for pickup", "Completed"):
+            self.assertContains(page, label)
+        self.assertContains(page, "The seller is preparing your food.")

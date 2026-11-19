@@ -1,0 +1,25 @@
+# Execution ledger — 2026-10-16-homebites-behavior.md
+
+Spec: ../specs/2026-10-16-homebites-behavior.md
+
+- Ruling: Keep working in the user's existing feature branch and project directory. The running site and uncommitted approved redesign are here; a new checkout would omit that work. Preserve the existing changes and verify database mutations in a separate temporary PostgreSQL instance first.
+- Ruling: Execute with one agent, including a separate author review at the end, honoring the user's cost preference. No per-task or final-review subagents.
+- Ruling: Do not stage existing redesign changes as incidental task commits. Keep an explicit progress/evidence ledger; local changes remain reviewable together at handoff.
+- Pre-flight: Tasks 3–6 consume Task 1 availability; Task 6 consumes Task 2 refresh; cart and payment retain existing transaction/ownership services. No conflicting interface names found.
+- Task 1: complete. New cutoff tests failed as expected, then availability/cart/checkout/concurrency/payment tests passed (30 tests).
+- Task 2: complete. New refresh tests first failed on the absent service; demo tests then passed, including two-week rotation, pause/stock preservation and Bangkok calendar dates. Concurrent refresh and historical-order preservation passed in the final gate.
+- Task 3: complete. Catalogue/detail/home/storefront share availability and display cutoff, per-window portions and alternatives. Discovery suite passed in the 31-test demo/discovery/cart gate (only the two then-unimplemented cart recovery tests failed).
+- Task 4: complete. Replacement and stale-cart tests failed, then 18 cart/view/checkout tests passed after recovery and signed recipe/price acknowledgement were added.
+- Task 5: complete. Status/fee explanation tests first failed; the expanded 49-test demo/discovery/cart/payment gate passed.
+- Task 6: complete. Staff readiness/CSRF, seller checklist, settled-only sales and vegan-photo safeguards passed in the full suite. Seller setup and staff actions were browser-verified.
+- Task 7: complete. Final suite passed 170/170 tests against PostgreSQL. System/migration checks passed. Decision register, scenarios, current startup/testing/handover and milestone evidence are saved.
+- Verification: complete suite passed 166 tests against isolated PostgreSQL, including concurrent refresh and last-portion checkout. The first full run had one stale review-copy expectation; updated it to the approved `No published reviews yet` wording and reran successfully.
+- Browser: standard pickup/cash and pre-order delivery with mock failure/new checkout/success completed; seller approval/setup, handoff, review submission and staff moderation exercised. QA detected a default `/favicon.ico` 404 from Django Admin; reproduced in a failing test and added a redirect to the existing local mark.
+- Final review: author self-review (one-agent preference). Reproduced a malformed cart-review query parameter raising an exception; bounded integer parsing added, with regression tests. Bounded catalogue queries and preservation of an existing confirmed order across refresh both passed.
+- Ruling: Docker stopped unexpectedly during a test run; restarted it and recreated only the disposable QA container. Repeated the affected tests rather than treating the interrupted output as evidence.
+- Final browser verification: complete journeys passed with zero unexpected console/page errors. Viewports 1440×900, 390×900 and 320×900; separate 390×844/200% text checks passed. Seller application/approval/publication/schedule/stock, pickup/cash, preorder/delivery/mock failure+fresh success, confirmation/handoff, review/moderation, cart conflict keep action, readiness refresh and unauthorized access were exercised.
+- Final visual correction: success notices now use success colors, neutral next-step guidance is not styled as an error, and online handoff does not mention cash collection. A cart overflow reproduced at 200% text was fixed by constraining controls/page width and allowing totals to wrap; the same browser check passed.
+- Ruling: The user's implementation authorization includes restoring usable existing demo availability after isolated verification. Applied the explicit refresh to marked records; existing order count stayed 1, historical windows/stock stayed intact, and all 50 offers became orderable.
+- Deferred minor: other browser engines remain untested. Generic cuisine photos remain explicitly illustrative; creating 50 exact dish images is outside this behavior pass.
+- Worktree policy: changes remain uncommitted; no unrelated local edits were removed, reset, staged or pushed.
+- Final handoff: `scripts/start-demo.ps1` executed successfully against the existing demo, retained all ten current marked windows without duplicating stock, and started Django with autoreload at `http://127.0.0.1:8000/`. Live catalogue/detail returned HTTP 200; catalogue showed 50 offers accepting orders and details showed the fulfillment selector. System/migration/diff checks passed. Disposable QA server/container were stopped; the user's dev server/database remain running.

@@ -1,16 +1,22 @@
 {% extends "base.html" %}
 {% load static %}
 {% block title %}Explore food | HomeBites{% endblock %}
+{% block extra_styles %}<link rel="stylesheet" href="{% static 'catalog/discovery.css' %}?v=20261022-2">{% endblock %}
 {% block content %}
-<link rel="stylesheet" href="{% static 'catalog/discovery.css' %}">
 <div class="catalog-page">
   <div class="catalog-heading">
-    <p class="catalog-eyebrow">Home-cooked food across Bangkok</p>
-    <h1>Explore food</h1>
-    <p>Browse dishes from five cuisine groups. Ingredients and prices belong to each seller's offer.</p>
+    <p class="catalog-eyebrow">Five cuisines. A taste of home.</p>
+    <h1>Explore food from home kitchens</h1>
+    <p>Browse five cuisines across Bangkok. Open a dish to check its seller's ingredients before ordering.</p>
   </div>
 
+  <nav class="catalog-cuisines" aria-label="Cuisine shortcuts">
+    <a href="{% url 'catalog:list' %}"{% if not selected_country %} aria-current="page"{% endif %}>All food</a>
+    {% for country in countries %}<a href="{% url 'catalog:list' %}?country={{ country.code }}"{% if selected_country == country.code %} aria-current="page"{% endif %}>{{ country.name }}</a>{% endfor %}
+  </nav>
+
   <form class="catalog-filters" method="get" action="{% url 'catalog:list' %}" role="search">
+    <div class="catalog-search-row">
     <div class="catalog-field catalog-field--search">
       <label for="catalog-search">Search dishes or sellers</label>
       <input id="catalog-search" type="search" name="q" value="{{ query }}" placeholder="Try Pad Thai">
@@ -25,10 +31,37 @@
       </select>
     </div>
     <div class="catalog-field">
+      <label for="catalog-category">Category</label>
+      <select id="catalog-category" name="category">
+        <option value="">All dishes</option>
+        {% for value, label in category_choices %}<option value="{{ value }}"{% if selected_category == value %} selected{% endif %}>{{ label }}</option>{% endfor %}
+      </select>
+    </div>
+    <button type="submit">Show food</button>
+    </div>
+    <details class="catalog-refinements"{% if selected_dietary or min_price or max_price or available_only or selected_area or selected_min_rating %} open{% endif %}>
+      <summary>Refine results <span>Diet, price &amp; availability</span></summary>
+      <div class="catalog-refinement-grid">
+    <div class="catalog-field">
       <label for="catalog-dietary">Seller-declared diet</label>
       <select id="catalog-dietary" name="dietary">
         <option value="">Any diet</option>
         {% for value, label in dietary_choices %}<option value="{{ value }}"{% if selected_dietary == value %} selected{% endif %}>{{ label }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="catalog-field">
+      <label for="catalog-rating">Rating</label>
+      <select id="catalog-rating" name="min_rating">
+        <option value="">Any rating</option>
+        <option value="4"{% if selected_min_rating == "4" %} selected{% endif %}>4 and up</option>
+        <option value="4.5"{% if selected_min_rating == "4.5" %} selected{% endif %}>4.5 and up</option>
+      </select>
+    </div>
+    <div class="catalog-field">
+      <label for="catalog-area">Pickup area</label>
+      <select id="catalog-area" name="area">
+        <option value="">Anywhere in Bangkok</option>
+        {% for location in areas %}<option value="{{ location.pk }}"{% if selected_area == location.pk|stringformat:"s" %} selected{% endif %}>{{ location.label }}</option>{% endfor %}
       </select>
     </div>
     <div class="catalog-field catalog-field--price">
@@ -40,32 +73,34 @@
       <input id="catalog-max" type="number" min="0" step="0.01" name="max_price" value="{{ max_price }}">
     </div>
     <div class="catalog-field catalog-field--availability">
-      <label for="catalog-available"><input id="catalog-available" type="checkbox" name="available" value="1"{% if available_only %} checked{% endif %}> Open slot</label>
+      <label for="catalog-available"><input id="catalog-available" type="checkbox" name="available" value="1"{% if available_only %} checked{% endif %}> Accepting orders</label>
     </div>
-    <button type="submit">Show food</button>
+      <a class="catalog-reset" href="{% url 'catalog:list' %}">Reset filters</a>
+      </div>
+    </details>
   </form>
 
   <div class="catalog-results-heading">
-    <h2>Available offers</h2>
-    <span>{{ page_obj.paginator.count }} offer{{ page_obj.paginator.count|pluralize }}</span>
+    <h2>Food offers</h2>
+    <div class="catalog-results-tools">
+      <span>{{ page_obj.paginator.count }} offer{{ page_obj.paginator.count|pluralize }}</span>
+      <form class="catalog-sort" method="get" action="{% url 'catalog:list' %}">
+        {% for key, value in kept_params %}<input type="hidden" name="{{ key }}" value="{{ value }}">{% endfor %}
+        <label for="catalog-sort">Sort by</label>
+        <select id="catalog-sort" name="sort" onchange="this.form.submit()">
+          <option value="">Name</option>
+          <option value="rating"{% if selected_sort == "rating" %} selected{% endif %}>Top rated</option>
+          <option value="price_asc"{% if selected_sort == "price_asc" %} selected{% endif %}>Price: low to high</option>
+          <option value="price_desc"{% if selected_sort == "price_desc" %} selected{% endif %}>Price: high to low</option>
+        </select>
+        <noscript><button type="submit">Sort</button></noscript>
+      </form>
+    </div>
   </div>
   {% if page_obj %}
     <div class="catalog-grid">
       {% for listing in page_obj %}
-        <article class="catalog-card">
-          <div class="catalog-card__art" aria-hidden="true">
-            {% if listing.image %}<img src="{{ listing.image.url }}" alt="">{% else %}<span>{{ listing.dish.country.code }}</span>{% endif %}
-          </div>
-          <div class="catalog-card__body">
-            <p class="catalog-card__country">{{ listing.dish.country.name }}</p>
-            <h3><a href="{% url 'catalog:detail' listing.pk %}">{{ listing.dish.name }}</a></h3>
-            <p class="catalog-card__description">{{ listing.description|default:listing.dish.description|truncatechars:110 }}</p>
-            <div class="catalog-card__footer">
-              <a href="{% url 'sellers:storefront' listing.seller.pk %}">{{ listing.seller.storefront_name }}</a>
-              <strong>฿{{ listing.price }}</strong>
-            </div>
-          </div>
-        </article>
+        {% include 'catalog/_food_card.html' %}
       {% endfor %}
     </div>
     {% if page_obj.has_other_pages %}

@@ -7,6 +7,8 @@ from catalog.models import FoodListing
 from orders.models import FulfillmentSlot, ListingStock, Order
 from sellers.models import SellerProfile
 from sellers.slot_forms import SellerSlotForm, StockCapacityForm
+from orders.availability import booking_cutoff, window_problem
+from django.utils import timezone
 
 
 def _approved_seller(request):
@@ -19,7 +21,10 @@ def _approved_seller(request):
 @login_required
 def slots(request):
     seller = _approved_seller(request)
-    slot_rows = FulfillmentSlot.objects.filter(seller=seller).prefetch_related("stocks__listing__dish")
+    slot_rows = list(FulfillmentSlot.objects.filter(seller=seller).prefetch_related("stocks__listing__dish"))
+    for slot in slot_rows:
+        slot.booking_cutoff = booking_cutoff(slot)
+        slot.booking_problem = window_problem(slot, at=timezone.now())
     listings = FoodListing.objects.filter(seller=seller).select_related("dish")
     return render(request, "sellers/slots/list.html", {
         "seller": seller, "slots": slot_rows, "listings": listings,

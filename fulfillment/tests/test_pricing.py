@@ -30,7 +30,7 @@ class LocationPricingTests(TestCase):
         self.assertEqual(quote.distance_km, Decimal("1.40"))
         self.assertEqual(quote.fee, Decimal("37.00"))
         self.assertEqual(quote.tariff_version, 1)
-        self.assertEqual(quote.label, "Simulated distance and delivery charge")
+        self.assertEqual(quote.label, "Estimated distance and delivery charge")
 
     def test_pickup_and_same_location_delivery_have_distinct_fees(self):
         self.assertEqual(pickup_fee(), Decimal("0.00"))

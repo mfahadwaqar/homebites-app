@@ -78,7 +78,7 @@ class ListingStock(models.Model):
 class Cart(models.Model):
     class Method(models.TextChoices):
         PICKUP = "pickup", "Pickup"
-        DELIVERY = "delivery", "Simulated delivery"
+        DELIVERY = "delivery", "Delivery"
 
     buyer = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="cart")
     seller = models.ForeignKey("sellers.SellerProfile", on_delete=models.PROTECT, null=True, blank=True)
@@ -95,6 +95,7 @@ class Cart(models.Model):
 class CartItem(models.Model):
     cart = models.ForeignKey(Cart, on_delete=models.CASCADE, related_name="items")
     listing = models.ForeignKey("catalog.FoodListing", on_delete=models.PROTECT)
+    slot = models.ForeignKey(FulfillmentSlot, on_delete=models.PROTECT, null=True, blank=True, related_name="+")
     quantity = models.PositiveIntegerField()
     acknowledged_ingredient_version = models.PositiveIntegerField()
     acknowledged_unit_price = models.DecimalField(max_digits=9, decimal_places=2)
@@ -106,6 +107,11 @@ class CartItem(models.Model):
         ]
 
     @property
+    def window(self):
+        """The fulfilment window chosen for this dish (older carts used one cart-wide slot)."""
+        return self.slot or self.cart.slot
+
+    @property
     def line_total(self):
         return self.listing.price * self.quantity
 
@@ -113,6 +119,7 @@ class CartItem(models.Model):
 class DeliveryQuote(models.Model):
     cart = models.ForeignKey(Cart, on_delete=models.CASCADE, related_name="quotes")
     cart_revision = models.PositiveIntegerField()
+    seller = models.ForeignKey("sellers.SellerProfile", on_delete=models.PROTECT, null=True, blank=True, related_name="+")
     method = models.CharField(max_length=8, choices=Cart.Method.choices)
     origin = models.ForeignKey("fulfillment.DemoLocation", on_delete=models.PROTECT, null=True, blank=True, related_name="origin_quotes")
     destination = models.ForeignKey("fulfillment.DemoLocation", on_delete=models.PROTECT, null=True, blank=True)
@@ -126,19 +133,23 @@ class DeliveryQuote(models.Model):
 
 class Order(models.Model):
     class Status(models.TextChoices):
-        PENDING_PAYMENT = "pending_payment", "Pending mock payment"
-        PAYMENT_FAILED = "payment_failed", "Mock payment failed"
+        PENDING_PAYMENT = "pending_payment", "Awaiting payment"
+        PAYMENT_FAILED = "payment_failed", "Payment failed"
         CASH_DUE = "cash_due", "Cash due"
         AWAITING_SELLER = "awaiting_seller", "Awaiting seller"
         CONFIRMED = "confirmed", "Confirmed"
+        PREPARING = "preparing", "Preparing"
+        READY = "ready", "Ready"
+        OUT_FOR_DELIVERY = "out_for_delivery", "Out for delivery"
+        DELIVERED = "delivered", "Delivered"
         EXPIRED = "expired", "Expired"
         CANCELLED = "cancelled", "Cancelled"
         REJECTED = "rejected", "Rejected"
         COMPLETED = "completed", "Completed"
 
     class PaymentMethod(models.TextChoices):
-        MOCK_PROMPTPAY = "mock_promptpay", "Mock PromptPay"
-        MOCK_CARD = "mock_card", "Mock card"
+        MOCK_PROMPTPAY = "mock_promptpay", "PromptPay"
+        MOCK_CARD = "mock_card", "Card"
         CASH_DELIVERY = "cash_delivery", "Cash on delivery"
         CASH_PICKUP = "cash_pickup", "Cash on pickup"
 
@@ -169,6 +180,14 @@ class Order(models.Model):
             models.UniqueConstraint(fields=["buyer", "idempotency_key"], name="unique_buyer_checkout_key"),
         ]
         ordering = ["-created_at", "-pk"]
+
+
+    @property
+    def display_status(self):
+        """Customer wording; 'Ready' reads 'Ready for pickup' on pickup orders."""
+        if self.status == self.Status.READY and self.fulfillment_method == Cart.Method.PICKUP:
+            return "Ready for pickup"
+        return self.get_status_display()
 
 
 class OrderItem(models.Model):

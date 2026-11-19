@@ -45,17 +45,30 @@ class CartServiceTests(TestCase):
             listing=cls.other_listing, slot=cls.other_slot, capacity=3,
         )
 
-    def test_conflicting_seller_does_not_discard_existing_cart(self):
+    def test_cart_holds_dishes_from_several_kitchens(self):
         from orders.models import CartItem
-        from orders.services.cart import CartConflict, add_to_cart
+        from orders.services.cart import add_to_cart, cart_groups
 
         cart = add_to_cart(self.buyer, self.first_listing, self.first_slot, 1)
+        add_to_cart(self.buyer, self.other_listing, self.other_slot, 2)
 
-        with self.assertRaises(CartConflict):
-            add_to_cart(self.buyer, self.other_listing, self.other_slot, 1)
+        self.assertEqual(CartItem.objects.filter(cart=cart).count(), 2)
+        groups = cart_groups(cart)
+        self.assertEqual(len(groups), 2)
+        self.assertEqual({g.seller.pk for g in groups}, {self.first_listing.seller_id, self.other_listing.seller_id})
 
-        self.assertEqual(CartItem.objects.filter(cart=cart).count(), 1)
-        self.assertEqual(cart.items.get().listing_id, self.first_listing.pk)
+    def test_same_dish_cannot_be_in_cart_for_two_windows(self):
+        from orders.services.cart import CartError, add_to_cart
+
+        add_to_cart(self.buyer, self.first_listing, self.first_slot, 1)
+        from datetime import timedelta
+        from django.utils import timezone
+        from orders.models import FulfillmentSlot, ListingStock
+        start = timezone.now() + timedelta(hours=5)
+        second = FulfillmentSlot.objects.create(seller=self.first_listing.seller, order_type="standard", starts_at=start, ends_at=start + timedelta(hours=2))
+        ListingStock.objects.create(listing=self.first_listing, slot=second, capacity=3)
+        with self.assertRaises(CartError):
+            add_to_cart(self.buyer, self.first_listing, second, 1)
 
     def test_buyer_cannot_add_their_own_listing(self):
         from orders.services.cart import CartError, add_to_cart
