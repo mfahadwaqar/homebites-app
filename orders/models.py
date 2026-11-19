@@ -157,6 +157,7 @@ class Order(models.Model):
     seller = models.ForeignKey("sellers.SellerProfile", on_delete=models.PROTECT, related_name="orders")
     slot = models.ForeignKey(FulfillmentSlot, on_delete=models.PROTECT)
     idempotency_key = models.CharField(max_length=80)
+    checkout_group = models.CharField(max_length=80, blank=True, default="", db_index=True)
     status = models.CharField(max_length=20, choices=Status.choices)
     payment_method = models.CharField(max_length=20, choices=PaymentMethod.choices)
     fulfillment_method = models.CharField(max_length=8, choices=Cart.Method.choices)

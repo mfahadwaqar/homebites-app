@@ -98,8 +98,10 @@ class BuyerJourneyTests(TestCase):
         self.client.post(reverse("orders:checkout"), {"idempotency_key": "multi-kitchen-1", "payment_method": "cash_pickup"})
         self.assertEqual(Order.objects.filter(buyer=self.buyer).count(), 2)
 
-    def test_online_payment_for_two_kitchens_pays_each_in_turn(self):
+    def test_one_payment_covers_every_kitchen_in_the_cart(self):
+        from decimal import Decimal
         from orders.models import Order
+        from payments.models import PaymentAttempt
         self.client.force_login(self.buyer)
         self.client.post(reverse("orders:add", args=[self.listing.pk]), {"slot": self.slot.pk, "quantity": 1})
         other, other_slot = self._second_kitchen()
@@ -107,8 +109,40 @@ class BuyerJourneyTests(TestCase):
         response = self.client.post(reverse("orders:checkout"), {"idempotency_key": "multi-kitchen-2", "payment_method": "mock_promptpay"})
         first, second = Order.objects.filter(buyer=self.buyer).order_by("pk")
         self.assertRedirects(response, reverse("payments:pay", args=[first.pk]))
-        page = self.client.get(reverse("payments:pay", args=[first.pk]))
-        self.assertContains(page, f"Order #{second.pk}")
+        total = first.customer_total + second.customer_total
+        # the second order's address shows the same single payment page
+        page = self.client.get(reverse("payments:pay", args=[second.pk]))
+        self.assertContains(page, "Payment for your 2 orders")
+        self.assertContains(page, f"{total}")
+        self.assertContains(page, first.seller.storefront_name)
+        self.assertContains(page, second.seller.storefront_name)
+        # a wrong total is refused and nothing is paid
+        self.client.post(reverse("payments:result", args=[first.pk]), {"outcome": "succeeded", "amount": str(first.customer_total)})
+        first.refresh_from_db(); second.refresh_from_db()
+        self.assertEqual(first.status, Order.Status.PENDING_PAYMENT)
+        self.assertEqual(second.status, Order.Status.PENDING_PAYMENT)
+        # one payment pays both kitchens
+        self.client.post(reverse("payments:result", args=[first.pk]), {"outcome": "succeeded", "amount": str(total)})
+        first.refresh_from_db(); second.refresh_from_db()
+        self.assertEqual(first.status, Order.Status.AWAITING_SELLER)
+        self.assertEqual(second.status, Order.Status.AWAITING_SELLER)
+        attempts = PaymentAttempt.objects.filter(order__in=[first, second])
+        self.assertEqual(attempts.count(), 2)
+        self.assertTrue(all(a.state == PaymentAttempt.State.SUCCEEDED for a in attempts))
+        self.assertEqual({a.order_id: a.amount for a in attempts}, {first.pk: first.customer_total, second.pk: second.customer_total})
+
+    def test_cancelling_a_shared_payment_cancels_every_kitchen_order(self):
+        from orders.models import Order
+        self.client.force_login(self.buyer)
+        self.client.post(reverse("orders:add", args=[self.listing.pk]), {"slot": self.slot.pk, "quantity": 1})
+        other, other_slot = self._second_kitchen()
+        self.client.post(reverse("orders:add", args=[other.pk]), {"slot": other_slot.pk, "quantity": 1})
+        self.client.post(reverse("orders:checkout"), {"idempotency_key": "multi-kitchen-3", "payment_method": "mock_card"})
+        first, second = Order.objects.filter(buyer=self.buyer).order_by("pk")
+        self.client.post(reverse("orders:cancel", args=[first.pk]))
+        first.refresh_from_db(); second.refresh_from_db()
+        self.assertEqual(first.status, Order.Status.CANCELLED)
+        self.assertEqual(second.status, Order.Status.CANCELLED)
 
     def test_stale_cart_explains_cutoff_and_preserves_items(self):
         from orders.models import Cart

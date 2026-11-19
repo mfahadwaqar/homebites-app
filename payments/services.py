@@ -219,3 +219,41 @@ def simulate_refund(order):
     attempt.resolved_at = timezone.now()
     attempt.save(update_fields=["state", "resolved_at"])
     return attempt
+
+
+def checkout_group_orders(order):
+    """Every order placed in the same checkout (just this order for older or single orders)."""
+    order_id = _order_id(order)
+    base = Order.objects.get(pk=order_id)
+    if not base.checkout_group:
+        return [base]
+    return list(Order.objects.filter(buyer_id=base.buyer_id, checkout_group=base.checkout_group).order_by("pk"))
+
+
+@transaction.atomic
+def resolve_group_payment(buyer, order, *, outcome, expected_total, now=None):
+    """Settle one payment for a whole checkout. Each kitchen's order keeps its own payment
+    record, which is that kitchen's share of the money, so one payment covers every kitchen."""
+    orders = checkout_group_orders(order)
+    if any(o.buyer_id != getattr(buyer, "pk", None) for o in orders):
+        raise PaymentConflict("This is not your payment.")
+    try:
+        submitted = Decimal(str(expected_total))
+    except (InvalidOperation, ValueError):
+        raise PaymentConflict("The payment amount is invalid.") from None
+    attempts = []
+    for member in orders:
+        attempt = PaymentAttempt.objects.filter(order=member).order_by("-pk").first()
+        if attempt is None:
+            attempt = create_payment_attempt(buyer, member, idempotency_key=f"web-order-{member.pk}", now=now)
+        attempts.append(attempt)
+    pending = [a for a in attempts if a.state == PaymentAttempt.State.PENDING]
+    if pending and submitted != sum((a.amount for a in pending), Decimal("0.00")):
+        raise PaymentConflict("The payment amount does not match the order.")
+    results = []
+    for attempt in attempts:
+        if attempt.state == PaymentAttempt.State.PENDING:
+            results.append(resolve_mock_payment(buyer, attempt, outcome=outcome, expected_amount=attempt.amount, now=now))
+        else:
+            results.append(attempt)
+    return results

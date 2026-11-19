@@ -1,13 +1,12 @@
 {% extends "base.html" %}
 {% load payment_extras %}
-{% block title %}Payment for order #{{ order.pk }} | HomeBites{% endblock %}
+{% block title %}Payment for {% if multi %}your orders{% else %}order #{{ order.pk }}{% endif %} | HomeBites{% endblock %}
 
 {% block content %}
 <section class="checkout-page" aria-labelledby="payment-title">
   <p class="checkout-steps" aria-label="Checkout progress"><span>1 Cart</span><span{% if attempt.state != "succeeded" and order.payment_method != "cash_pickup" and order.payment_method != "cash_delivery" %} class="is-current"{% endif %}>2 Payment</span><span{% if attempt.state == "succeeded" or order.payment_method == "cash_pickup" or order.payment_method == "cash_delivery" %} class="is-current"{% endif %}>3 Confirmation</span></p>
-  <h1 id="payment-title">Payment for order #{{ order.pk }}</h1>
+  <h1 id="payment-title">{% if multi %}Payment for your {{ group|length }} orders{% else %}Payment for order #{{ order.pk }}{% endif %}</h1>
   <p class="checkout-lead">{{ presentation.next_action }}</p>
-  {% if next_unpaid %}<p class="form-alert">You have another order waiting for payment: <a href="{% url 'payments:pay' next_unpaid.pk %}">Order #{{ next_unpaid.pk }} from {{ next_unpaid.seller.storefront_name }}</a>.</p>{% endif %}
 
   <div class="checkout-layout">
     <div class="checkout-main">
@@ -33,31 +32,33 @@
                 <li>Confirm the payment, then press Pay below.</li>
               </ol>
             </div>
-            <dl class="pay-facts"><div><dt>Amount</dt><dd>฿{{ order.customer_total }}</dd></div><div><dt>Reference</dt><dd>{{ attempt.mock_reference }}</dd></div><div><dt>Pay to</dt><dd>{{ order.seller.storefront_name }}</dd></div></dl>
+            <dl class="pay-facts"><div><dt>Amount</dt><dd>฿{{ group_total }}</dd></div><div><dt>Reference</dt><dd>{{ attempt.mock_reference }}</dd></div><div><dt>Pay to</dt><dd>{% if multi %}HomeBites, split between {{ group|length }} kitchens{% else %}{{ order.seller.storefront_name }}{% endif %}</dd></div></dl>
           </div>
         {% else %}
           <div class="pay-card pay-method">
             <h2>Card payment</h2>
             <div class="mock-card" aria-hidden="true"><span class="mock-card__chip"></span><span class="mock-card__number">•••• •••• •••• 0000</span><span class="mock-card__row"><span>HOMEBITES</span><span>--/--</span></span></div>
             <p>No card number, expiry date or security code is requested on this page. Press Pay to complete the payment.</p>
-            <dl class="pay-facts"><div><dt>Amount</dt><dd>฿{{ order.customer_total }}</dd></div><div><dt>Reference</dt><dd>{{ attempt.mock_reference }}</dd></div></dl>
+            <dl class="pay-facts"><div><dt>Amount</dt><dd>฿{{ group_total }}</dd></div><div><dt>Reference</dt><dd>{{ attempt.mock_reference }}</dd></div></dl>
           </div>
         {% endif %}
         <form class="pay-card pay-actions" method="post" action="{% url 'payments:result' order.pk %}">
           {% csrf_token %}
-          <input type="hidden" name="amount" value="{{ order.customer_total }}">
-          <button class="pay-actions__main" type="submit" name="outcome" value="succeeded">{% if order.payment_method == "mock_promptpay" %}I've paid ฿{{ order.customer_total }}{% else %}Pay ฿{{ order.customer_total }}{% endif %}</button>
+          <input type="hidden" name="amount" value="{{ group_total }}">
+          <button class="pay-actions__main" type="submit" name="outcome" value="succeeded">{% if order.payment_method == "mock_promptpay" %}I've paid ฿{{ group_total }}{% else %}Pay ฿{{ group_total }}{% endif %}</button>
         </form>
-        <form class="pay-cancel" method="post" action="{% url 'orders:cancel' order.pk %}">{% csrf_token %}<button class="text-button" type="submit">Cancel payment and order</button></form>
-        {% if order.hold_expires_at %}<p class="pay-countdown" data-expires="{{ order.hold_expires_at|date:'c' }}">Portions are held until {{ order.hold_expires_at|date:"j M Y, H:i" }} Bangkok time. <span class="pay-countdown__left"></span></p>{% endif %}
+        <form class="pay-cancel" method="post" action="{% url 'orders:cancel' order.pk %}">{% csrf_token %}<button class="text-button" type="submit">Cancel payment and {% if multi %}orders{% else %}order{% endif %}</button></form>
+        {% if hold_expires_at %}<p class="pay-countdown" data-expires="{{ hold_expires_at|date:'c' }}">Portions are held until {{ hold_expires_at|date:"j M Y, H:i" }} Bangkok time. <span class="pay-countdown__left"></span></p>{% endif %}
 
       {% elif attempt and attempt.state == "succeeded" %}
         <div class="pay-card pay-state pay-state--ok">
           <h2>Payment received</h2>
-          <p>Thank you. The seller must now confirm your order.</p>
-          <p class="pay-amount">฿{{ order.customer_total }}</p>
+          <p>{% if multi %}Thank you. One payment covers all {{ group|length }} orders, and it is split between the kitchens. Each kitchen must now confirm its order.{% else %}Thank you. The seller must now confirm your order.{% endif %}</p>
+          <p class="pay-amount">฿{{ group_total }}</p>
           <p class="pay-card__meta">Reference {{ attempt.mock_reference }} · {{ order.get_payment_method_display }}</p>
-          <p class="pay-state__actions"><a class="primary-link" href="{% url 'orders:detail' order.pk %}">Track your order</a> <a class="btn-link" href="{% url 'orders:receipt' order.pk %}">View receipt</a></p>
+          {% if multi %}<ul class="pay-split">{% for m in group %}<li>{{ m.seller.storefront_name }}: ฿{{ m.customer_total }} · <a href="{% url 'orders:detail' m.pk %}">Track order #{{ m.pk }}</a> · <a href="{% url 'orders:receipt' m.pk %}">Receipt</a></li>{% endfor %}</ul>
+          <p class="pay-state__actions"><a class="primary-link" href="{% url 'orders:list' %}">View all orders</a></p>
+          {% else %}<p class="pay-state__actions"><a class="primary-link" href="{% url 'orders:detail' order.pk %}">Track your order</a> <a class="btn-link" href="{% url 'orders:receipt' order.pk %}">View receipt</a></p>{% endif %}
         </div>
       {% elif attempt and attempt.state == "failed" %}
         <div class="pay-card pay-state pay-state--bad">
@@ -81,19 +82,22 @@
 
     <aside class="checkout-side">
       <div class="pay-card summary">
-        <h2>Order #{{ order.pk }}</h2>
-        <ul class="summary__items">{% for item in order.items.all %}<li><span>{{ item.dish_name_snapshot }} × {{ item.quantity }}</span><span>฿{{ item.line_total }}</span></li>{% endfor %}</ul>
+        {% for m in group %}
+        <h2>Order #{{ m.pk }}{% if multi %} · {{ m.seller.storefront_name }}{% endif %}</h2>
+        <ul class="summary__items">{% for item in m.items.all %}<li><span>{{ item.dish_name_snapshot }} × {{ item.quantity }}</span><span>฿{{ item.line_total }}</span></li>{% endfor %}</ul>
         <dl class="order-totals">
-          <div><dt>Food</dt><dd>฿{{ order.food_subtotal }}</dd></div>
-          <div><dt>Delivery</dt><dd>฿{{ order.delivery_fee }}</dd></div>
-          <div class="order-totals__total"><dt>Total</dt><dd>฿{{ order.customer_total }}</dd></div>
+          <div><dt>Food</dt><dd>฿{{ m.food_subtotal }}</dd></div>
+          <div><dt>Delivery</dt><dd>฿{{ m.delivery_fee }}</dd></div>
+          <div class="order-totals__total"><dt>{% if multi %}Kitchen total{% else %}Total{% endif %}</dt><dd>฿{{ m.customer_total }}</dd></div>
         </dl>
+        {% endfor %}
+        {% if multi %}<dl class="order-totals"><div class="order-totals__total"><dt>You pay once</dt><dd>฿{{ group_total }}</dd></div></dl>{% endif %}
         <dl class="pay-facts">
           <div><dt>Method</dt><dd>{{ order.get_payment_method_display }}</dd></div>
           <div><dt>Order status</dt><dd>{{ order.display_status }}</dd></div>
-          <div><dt>Kitchen</dt><dd>{{ order.seller.storefront_name }}</dd></div>
+          {% if not multi %}<div><dt>Kitchen</dt><dd>{{ order.seller.storefront_name }}</dd></div>{% endif %}
         </dl>
-        <p><a href="{% url 'orders:detail' order.pk %}">View order</a> · <a href="{% url 'orders:receipt' order.pk %}">Receipt</a></p>
+        {% if not multi %}<p><a href="{% url 'orders:detail' order.pk %}">View order</a> · <a href="{% url 'orders:receipt' order.pk %}">Receipt</a></p>{% endif %}
       </div>
     </aside>
   </div>

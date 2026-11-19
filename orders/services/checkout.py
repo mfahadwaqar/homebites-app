@@ -150,6 +150,7 @@ def checkout_orders(buyer, *, idempotency_key, payment_method):
             seller=group.seller,
             slot=slot,
             idempotency_key=_order_key(idempotency_key, index, len(prepared)),
+            checkout_group=idempotency_key,
             status=Order.Status.PENDING_PAYMENT if online else Order.Status.CASH_DUE,
             payment_method=payment_method,
             fulfillment_method=cart.method,

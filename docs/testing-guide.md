@@ -63,7 +63,7 @@ Sign in as `demo_buyer`.
 |---|---|---|
 | 3.1 | Open a dish, choose a window, quantity 2, Add to cart | Green message and the cart page with a steps bar (Cart, Payment, Confirmation) |
 | 3.2 | In the cart change portions to 3, Update | The order summary on the right changes |
-| 3.3 | Add a dish from a **different** kitchen | Both kitchens appear in the cart as separate groups. The button says "Place 2 orders" |
+| 3.3 | Add a dish from a **different** kitchen | Both kitchens appear in the cart as separate groups. The button says "Place 2 orders". With PromptPay or card you pay once for both and the payment is split between the kitchens |
 | 3.4 | Under **Pickup or delivery** choose Pickup | Summary shows "Pickup: Free" and a total |
 | 3.5 | Choose **Bangkok delivery**, then an area | The delivery price and distance appear in the summary **by themselves**, no extra click. Try a second area: the price changes |
 | 3.6 | Choose Delivery but no area yet | A hint says to choose your delivery area |

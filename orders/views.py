@@ -150,7 +150,7 @@ def checkout_view(request):
     if len(orders) > 1:
         messages.success(request, f"{len(orders)} orders placed, one for each kitchen.")
         if pending:
-            messages.info(request, f"Pay each order in turn. {len(pending)} to pay.")
+            messages.info(request, "Pay once for all of them below. Your payment is split between the kitchens automatically.")
             return redirect("payments:pay", order_id=pending[0].pk)
         return redirect("orders:list")
     order = orders[0]
@@ -195,8 +195,14 @@ def order_receipt(request, pk):
 @require_POST
 def order_cancel(request, pk):
     order = get_object_or_404(Order, pk=pk, buyer=request.user)
+    targets = [order]
+    if order.checkout_group and order.status == Order.Status.PENDING_PAYMENT:
+        targets = list(Order.objects.filter(
+            buyer=request.user, checkout_group=order.checkout_group, status=Order.Status.PENDING_PAYMENT,
+        ).order_by("pk"))
     try:
-        cancel_order(request.user, order)
+        for target in targets:
+            cancel_order(request.user, target)
     except CheckoutConflict as exc:
         messages.error(request, str(exc))
     return redirect("orders:detail", pk=pk)
