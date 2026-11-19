@@ -15,3 +15,4 @@ class Command(BaseCommand):
             call_command("seed_demo")
             call_command("seed_sample_reviews")
         call_command("set_demo_passwords")
+        call_command("create_team_accounts")
